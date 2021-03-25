@@ -64,13 +64,6 @@ fun_theta = lambda t : ( np.deg2rad(t)/(sin(t)**2) - cot(t) )
 x0 = np.sqrt( np.pi/fun_theta(theta_g_0) )
 print("Initial c.l. distance  = "+str(x0*R0)+" [nm]")
 
-# Compute maximum contact angle
-"""
-Lz = 175.0  # nm
-theta_max = sc_opt.fsolve(lambda t : (fun_theta(t)-4.0*np.pi*(R0/Lz)**2), theta_e)[0]
-print("Max c.a. to in the box = "+str(theta_max)+" [deg]")
-"""
-
 # Friction ratio [nondim]
 mu_star = 10.0
 print("Friction ratio mu_f/mu = "+str(mu_star)+" [nm]")
@@ -89,14 +82,6 @@ dsdx = lambda x : np.sqrt( 1.0 + (a*cos(beta*x))**2 )
 # MKT
 V = lambda x : ( cos( theta_e ) - cos( phi(x) ) ) / dsdx(x)
 
-"""
-x = np.linspace(0.0, 1.0, 500)
-plt.plot(x, V(x), 'k-', linewidth=1.5)
-plt.plot([0.0, 1.0], [0.0, 0.0], 'r-', linewidth=1.5)
-plt.xlim([0, 1.0])
-plt.show()
-"""
-
 # Numerical integration
 # Final time [ps]
 t_fin = 45.0
@@ -112,11 +97,8 @@ x_vec = []
 theta_g_vec = []
 x = x0
 n = 0
+
 while n<Nt :
-    """
-    if n%100==0 :
-        print("theta_m = "+str(phi(x)))
-    """
     x = x + V(x)*dt/mu_star
     x_vec.append(x)
     theta_try = theta_g(x)
@@ -124,7 +106,6 @@ while n<Nt :
     n+=1
 
 x_vec = np.array(x_vec)
-
 t_vec = np.linspace(0.0, n*dt, n)
 
 fig1, (ax1, ax2) = plt.subplots(1, 2)
