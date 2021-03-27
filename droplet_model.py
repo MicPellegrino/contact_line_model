@@ -41,7 +41,7 @@ print("Reference time         = "+str(tau)+" [ns]")
 theta_g_0 = 130.0
 print("Initial c. a           = "+str(theta_g_0)+" [deg]")
 theta_e = 38.8
-print("Equilibrium c. a.      = "+str(theta_e)+" [deg]")
+print("Equilibrium ca (micro) = "+str(theta_e)+" [deg]")
 delta_theta = theta_g_0-theta_e
 
 # Roughness coefficient 'a' [nondim]
@@ -56,6 +56,7 @@ print("Corrugation height     = "+str(h)+" [nm]")
 a2 = a**2
 rough_parameter = (2.0/np.pi) * np.sqrt(a2+1.0) * sc_spc.ellipe(a2/(a2+1.0))
 theta_w = cos_m1( rough_parameter*cos(theta_e) )
+print("Equilibrium ca (macro) = "+str(theta_w)+" [deg]")
 
 # Initial reduced droplet area [nondim]
 A0 = np.pi
