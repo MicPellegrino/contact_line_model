@@ -7,6 +7,14 @@ from matplotlib import cm
 import scipy.optimize as sc_opt
 import scipy.special as sc_spc
 
+# Rational polynomial fit
+def rational(x, p, q) :
+    return np.polyval(p, x) / np.polyval(q + [1.0], x)
+def rational_4_2(x, p0, p1, p2, p3, q1) :
+    return rational(x, [p0, p1, p2, p3], [q1,])
+def ratioder_4_2(x, p0, p1, p2, p3, q1) :
+    return rational(x, [2*p0*q1, 3*p0+p1*q1, 2*p1, p2-p3*q1], [q1*q1, 2*q1,])
+
 cos = lambda t : np.cos( np.deg2rad(t) )
 sin = lambda t : np.sin( np.deg2rad(t) )
 tan = lambda t : np.tan( np.deg2rad(t) )
@@ -14,6 +22,9 @@ cot = lambda t : 1.0/np.tan( np.deg2rad(t) )
 tan_m1 = lambda t : np.rad2deg(np.arctan(t))
 cos_m1 = lambda t : np.rad2deg(np.arccos(t))
 sin_m1 = lambda t : np.rad2deg(np.arcsin(t))
+
+# Hyperbolic sine for fitting c.l. friction
+sinh = lambda x, a, b, c : a*np.sinh(b-c*x)
 
 # GLOBAL VARIABLES (FOR WATER-VAPOR)
 # Surface tension [mPa*m]
@@ -36,6 +47,8 @@ class RoughSubstrate :
 
     def __init__(self, l, mu_f, R0, a, theta_g_0_flat, theta_e, Gamma=None) :
 
+        # C.l. friction [cP]
+        print("C.l. friction         = "+str(mu_f)+" [cP]")
         # Corrugation wavelength [nm]
         print("Corrugation length    = "+str(l)+" [nm]")
         # Corrugation number [1/nm]
@@ -95,6 +108,7 @@ class RoughSubstrate :
         self.V = lambda x : (cos(self.theta_e)-cos(self.phi(x)))/self.dsdx(x)
 
 
+# The numerical integrators need to be jitted!
 class EulerMurayama :
 
     def __init__(self, RS, t_fin, t_bin, M) :
@@ -153,12 +167,27 @@ class EulerMurayama :
         self.theta_std = np.sqrt(self.theta_var)
         self.theta_ste = self.theta_std/np.sqrt(self.M)
 
+    def fit_cl_friction(self, RS) :
+
+        self.t = RS.tau*self.t_vec
+        self.x = TWOPI*self.x_ens/RS.k
+
+        popt1, pcov1 = sc_opt.curve_fit(rational_4_2, self.t, self.x)
+        self.x_fit = rational_4_2(self.t, *popt1)
+        self.v_fit = ratioder_4_2(self.t, *popt1)
+
+        self.ct = cos(self.theta_g_ens)
+        popt2, pcov2 = sc_opt.curve_fit(sinh, self.ct, self.v_fit)
+        self.v_mkt = sinh(self.ct, *popt2)
+        self.mu_f_fit = gamma/popt2[0]*popt2[2]
+        print("Eff. c.l. friction    = "+str(self.mu_f_fit)+" [cP]")
+
 
 def test_plot() :
 
-    RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=0.1,theta_g_0_flat=105.8,theta_e=55.6)
+    RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=1,theta_g_0_flat=105.8,theta_e=55.6)
 
-    EM = EulerMurayama(RS=RS,t_fin=100.0,t_bin=0.5,M=25)
+    EM = EulerMurayama(RS=RS,t_fin=35.0,t_bin=0.1,M=20)
     EM.simulate_ode(RS)
     EM.simulate_sde(RS)
 
@@ -170,7 +199,6 @@ def test_plot() :
     print("theta_fin_sde = "+str(theta_fin_sde)+" [deg]")
 
     fig1, (ax1, ax2) = plt.subplots(2, 1)
-
     ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_vec/RS.k, 'k-', linewidth=3.0)
     ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_ens/RS.k, 'r-', linewidth=2.5)
     ax1.fill_between(RS.tau*EM.t_vec,TWOPI*(EM.x_ens+EM.x_std)/RS.k,TWOPI*(EM.x_ens-EM.x_std)/RS.k,color='r',alpha=0.5,linewidth=0.0)
@@ -178,7 +206,6 @@ def test_plot() :
     ax1.set_xlim([RS.tau*EM.t_vec[0], RS.tau*EM.t_vec[-1]])
     ax1.tick_params(axis='x',which='both',labelbottom=False)
     ax1.tick_params(axis='y', labelsize=25)
-
     ax2.plot(RS.tau*EM.t_vec, EM.theta_g_vec, 'k-', linewidth=3.0)
     ax2.plot(RS.tau*EM.t_vec, EM.theta_g_ens, 'r-', linewidth=2.0, label=r'$<x_{cl}>$')
     ax2.fill_between(RS.tau*EM.t_vec,EM.theta_g_ens+EM.theta_std,EM.theta_g_ens-EM.theta_std,color='r',alpha=0.5,linewidth=0.0)
@@ -189,7 +216,18 @@ def test_plot() :
     ax2.legend(fontsize=25)
     ax2.tick_params(axis='x', labelsize=25)
     ax2.tick_params(axis='y', labelsize=25)
+    plt.show()
 
+    EM.fit_cl_friction(RS)
+
+    fig1, (ax1, ax2) = plt.subplots(1, 2)
+    ax1.plot(EM.t, EM.x_fit)
+    ax1.plot(EM.t, EM.x)
+    ax2.plot(EM.t, EM.v_fit)
+    plt.show()
+
+    plt.plot(EM.ct, EM.v_fit)
+    plt.plot(EM.ct, EM.v_mkt)
     plt.show()
 
 
@@ -226,13 +264,14 @@ def parametric_study(l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,theta_e=5
     np.save('diff_ode.npy',diff_ode)
     np.save('diff_sde.npy',diff_sde)
 
+
 if __name__ == "__main__" :
     
+    test_plot()
+
     Np = 36
     l_vec = np.linspace(0.5,5.5,Np)
-    print(l_vec)
     a_vec = np.linspace(0,1,Np)
-    print(a_vec)
     np.save('l_vec.npy',l_vec)
     np.save('a_vec.npy',a_vec)
 
@@ -258,8 +297,4 @@ if __name__ == "__main__" :
     ax2.set_ylabel('a [1]')
     cb2 = plt.colorbar(dmap2,ax=ax2)
     cb2.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270)
-    plt.show()
-
-    plt.pcolormesh(L,A,d1-d2,cmap=cm.bone)
-    plt.colorbar()
     plt.show()
