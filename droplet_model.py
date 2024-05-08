@@ -40,7 +40,8 @@ print("Reference time         = "+str(tau)+" [ns]")
 # Contact angles [deg]
 theta_g_0 = 130.0
 print("Initial c. a           = "+str(theta_g_0)+" [deg]")
-theta_e = 38.8
+# theta_e = 38.8
+theta_e = 68.8
 print("Equilibrium ca (micro) = "+str(theta_e)+" [deg]")
 delta_theta = theta_g_0-theta_e
 

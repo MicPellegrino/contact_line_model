@@ -14,6 +14,8 @@ def rational_4_2(x, p0, p1, p2, p3, q1) :
     return rational(x, [p0, p1, p2, p3], [q1,])
 def ratioder_4_2(x, p0, p1, p2, p3, q1) :
     return rational(x, [2*p0*q1, 3*p0+p1*q1, 2*p1, p2-p3*q1], [q1*q1, 2*q1,])
+def ratiodr2_4_2(x, p0, p1, p2, p3, q1) :
+    return rational(x, [2*p0*q1*q1, 6*p0*q1, 6*p0, 2*(p1-p2*q1+p3*q1*q1)], [q1**3, 3*q1*q1, 3*q1])
 
 cos = lambda t : np.cos( np.deg2rad(t) )
 sin = lambda t : np.sin( np.deg2rad(t) )
@@ -167,25 +169,60 @@ class EulerMurayama :
         self.theta_std = np.sqrt(self.theta_var)
         self.theta_ste = self.theta_std/np.sqrt(self.M)
 
-    def fit_cl_friction(self, RS) :
+    def fit_cl_friction(self, RS, p0=None, mv=1000) :
 
         self.t = RS.tau*self.t_vec
         self.x = TWOPI*self.x_ens/RS.k
 
-        popt1, pcov1 = sc_opt.curve_fit(rational_4_2, self.t, self.x)
+        popt1, pcov1 = sc_opt.curve_fit(rational_4_2, self.t, self.x, maxfev=mv)
         self.x_fit = rational_4_2(self.t, *popt1)
         self.v_fit = ratioder_4_2(self.t, *popt1)
 
         self.ct = cos(self.theta_g_ens)
-        popt2, pcov2 = sc_opt.curve_fit(sinh, self.ct, self.v_fit)
+        popt2, pcov2 = sc_opt.curve_fit(sinh, self.ct, self.v_fit, p0, maxfev=mv)
         self.v_mkt = sinh(self.ct, *popt2)
         self.mu_f_fit = gamma/popt2[0]*popt2[2]
         print("Eff. c.l. friction    = "+str(self.mu_f_fit)+" [cP]")
 
+        return popt2
+    
+    def fit_cl_friction_ls(self, RS, lvel=10, lacc=1, p0=None, p0_ls=[1,1,1,1,1], mv=1000) :
+
+        self.t = RS.tau*self.t_vec
+        self.x = TWOPI*self.x_ens/RS.k
+
+        def rd_m(p) :
+            r = ratioder_4_2(self.t,*p)
+            r[r>0] = 0
+            return r 
+        
+        def r2_p(p) :
+            r = ratiodr2_4_2(self.t,*p)
+            r[r<0] = 0
+            return r 
+        
+        def fres(p):
+            return np.concatenate((self.x-rational_4_2(self.t,*p),lvel*rd_m(p),lacc*r2_p(p)),axis=None)
+
+        ls_results = sc_opt.least_squares(fres, x0=p0_ls, max_nfev=mv)
+        popt1 = ls_results.x
+        self.x_fit = rational_4_2(self.t, *popt1)
+        self.v_fit = ratioder_4_2(self.t, *popt1)
+
+        self.ct = cos(self.theta_g_ens)
+        popt2, pcov2 = sc_opt.curve_fit(sinh, self.ct, self.v_fit, p0, maxfev=mv)
+        self.v_mkt = sinh(self.ct, *popt2)
+        self.mu_f_fit = gamma/popt2[0]*popt2[2]
+        print("Eff. c.l. friction    = "+str(self.mu_f_fit)+" [cP]")
+
+        return popt2
+
 
 def test_plot() :
 
-    RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=1,theta_g_0_flat=105.8,theta_e=55.6)
+    # RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=1,theta_g_0_flat=105.8,theta_e=55.6)
+    # RS = RoughSubstrate(l=4.388888888888889,mu_f=10*mu,R0=20,a=0.7777777777777777,theta_g_0_flat=105.8,theta_e=55.6)
+    RS = RoughSubstrate(l=3.0357142857142856,mu_f=5.34,R0=15,a=1,theta_g_0_flat=105.8,theta_e=55.6)
 
     EM = EulerMurayama(RS=RS,t_fin=35.0,t_bin=0.1,M=20)
     EM.simulate_ode(RS)
@@ -226,8 +263,13 @@ def test_plot() :
     ax2.plot(EM.t, EM.v_fit)
     plt.show()
 
-    plt.plot(EM.ct, EM.v_fit)
-    plt.plot(EM.ct, EM.v_mkt)
+    plt.plot(EM.ct, EM.v_fit, 'k-', linewidth=3.0)
+    plt.plot(EM.ct, EM.v_mkt, 'r-', linewidth=3.0, label='MKT fit')
+    plt.tick_params(axis='x', labelsize=25)
+    plt.tick_params(axis='y', labelsize=25)
+    plt.legend(fontsize=25)
+    plt.xlabel(r'$\cos<\theta_g>$ []', fontsize=30.0)
+    plt.ylabel(r'$<u_{cl}>$ [nm/ns]', fontsize=30.0)
     plt.show()
 
 
@@ -237,7 +279,9 @@ def parametric_study(l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,theta_e=5
     theta_w_vec = np.zeros(s)
     theta_fin_ode_vec = np.zeros(s)
     theta_fin_sde_vec = np.zeros(s)
+    mu_f_ratio = np.zeros(s)
 
+    p0 = None
     n = 0
     for i in range(len(l_vec)) :
         for j in range(len(a_vec)) :
@@ -247,6 +291,7 @@ def parametric_study(l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,theta_e=5
             EM = EulerMurayama(RS=RS,t_fin=t_fin,t_bin=t_bin,M=M)
             EM.simulate_ode(RS)
             EM.simulate_sde(RS)
+            p0 = EM.fit_cl_friction(RS,p0)
             theta_w = RS.theta_w
             print("theta_w       = "+str(theta_w)+" [deg]")
             theta_fin_ode = EM.theta_g_vec[-1]
@@ -257,44 +302,78 @@ def parametric_study(l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,theta_e=5
             theta_w_vec[i,j] = theta_w
             theta_fin_ode_vec[i,j] = theta_fin_ode
             theta_fin_sde_vec[i,j] = theta_fin_sde
+            mu_f_ratio[i,j] = EM.mu_f_fit/mu_f
 
     diff_ode = np.abs(theta_fin_ode_vec-theta_w_vec)
     diff_sde = np.abs(theta_fin_sde_vec-theta_w_vec)
 
     np.save('diff_ode.npy',diff_ode)
     np.save('diff_sde.npy',diff_sde)
+    np.save('mu_f_ratio.npy',mu_f_ratio)
 
+
+FSL = 50
+FST = 35
+LBP = 60
 
 if __name__ == "__main__" :
     
     test_plot()
 
     Np = 36
-    l_vec = np.linspace(0.5,5.5,Np)
+    
+    l_vec = np.linspace(0.25,3.5,Np)
+    # print(l_vec)
+    
     a_vec = np.linspace(0,1,Np)
+    # print(a_vec)
+    
     np.save('l_vec.npy',l_vec)
     np.save('a_vec.npy',a_vec)
 
-    # Testing
     l_vec = np.load('l_vec.npy')
     a_vec = np.load('a_vec.npy')
 
     L, A = np.meshgrid(l_vec,a_vec,sparse=False,indexing='ij')
 
-    # parametric_study(l_vec,a_vec,M=25)
+    # parametric_study(l_vec,a_vec,mu_f=5.34,R0=15,M=25,t_fin=100,t_bin=0.3)
 
     d1 = np.load('diff_ode.npy')
     d2 = np.load('diff_sde.npy')
+    mr = np.load('mu_f_ratio.npy')
+
     vmax = max(np.max(d1),np.max(d2))
     fig1, (ax1, ax2) = plt.subplots(1, 2)
-    dmap1 = ax1.pcolormesh(L,A,d1,vmin=0,vmax=vmax,cmap=cm.bone)
-    ax1.set_xlabel('l [nm]')
-    ax1.set_ylabel('a [1]')
+    dmap1 = ax1.pcolormesh(L,A,d1,vmin=0,vmax=vmax,cmap=cm.plasma)
+    ax1.set_xlabel('l [nm]',fontsize=FSL)
+    ax1.set_ylabel('a [1]',fontsize=FSL)
+    ax1.tick_params(labelsize=FST)
     cb1 = plt.colorbar(dmap1,ax=ax1)
-    cb1.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270)
-    dmap2 = ax2.pcolormesh(L,A,d2,vmin=0,vmax=vmax,cmap=cm.bone)
-    ax2.set_xlabel('l [nm]')
-    ax2.set_ylabel('a [1]')
+    cb1.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
+    cb1.ax.tick_params(labelsize=0.8*FST)
+    dmap2 = ax2.pcolormesh(L,A,d2,vmin=0,vmax=vmax,cmap=cm.plasma)
+    ax2.set_xlabel('l [nm]',fontsize=FSL)
+    ax2.set_ylabel('a [1]',fontsize=FSL)
+    ax2.tick_params(labelsize=FST)
     cb2 = plt.colorbar(dmap2,ax=ax2)
-    cb2.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270)
+    cb2.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
+    cb2.ax.tick_params(labelsize=0.8*FST)
+    plt.show()
+
+    vmax = max(np.max(d1),np.max(d2))
+    fig1, (ax1, ax2) = plt.subplots(1, 2)
+    dmap1 = ax1.pcolormesh(L,A,d2,vmin=0,vmax=vmax,cmap=cm.plasma)
+    ax1.set_xlabel('l [nm]',fontsize=FSL)
+    ax1.set_ylabel('a [1]',fontsize=FSL)
+    ax1.tick_params(labelsize=FST)
+    cb1 = plt.colorbar(dmap1,ax=ax1)
+    cb1.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
+    cb1.ax.tick_params(labelsize=0.8*FST)
+    dmap2 = ax2.pcolormesh(L,A,np.log(mr),cmap=cm.plasma)
+    ax2.set_xlabel('l [nm]',fontsize=FSL)
+    ax2.set_ylabel('a [1]',fontsize=FSL)
+    ax2.tick_params(labelsize=FST)
+    cb2 = plt.colorbar(dmap2,ax=ax2)
+    cb2.ax.set_ylabel(r'$\log(\mu_f^*/\mu_f)$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
+    cb2.ax.tick_params(labelsize=0.8*FST)
     plt.show()
