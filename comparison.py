@@ -7,6 +7,8 @@ from matplotlib import cm
 import scipy.optimize as sc_opt
 import scipy.special as sc_spc
 
+from numba import jit
+
 # Rational polynomial fit
 def rational(x, p, q) :
     return np.polyval(p, x) / np.polyval(q + [1.0], x)
@@ -43,6 +45,18 @@ T = 300
 kB = 0.1380649
 # Depth [nm]
 Ly = 4.67650
+
+
+# Reduced droplet area [nondim]
+@jit(nopython=True)
+def fun_theta(t) :
+    tt = np.deg2rad(t)
+    return tt/(np.sin(tt)**2)-1.0/np.tan(tt)
+
+# Helper to fsolve for the macroscopic angle
+@jit(nopython=True)
+def aux_fsolve(x,t) :
+    return (x**2)*fun_theta(t)-np.pi
 
 
 class RoughSubstrate :
@@ -86,14 +100,15 @@ class RoughSubstrate :
         print("Initial c. a          = "+str(self.theta_g_0)+" [deg]")
 
         # Initial reduced droplet area [nondim]
-        self.fun_theta = lambda t : ( np.deg2rad(t)/(sin(t)**2) - cot(t) )
+        # self.fun_theta = lambda t : ( np.deg2rad(t)/(sin(t)**2) - cot(t) )
+
         # Initial wetted distance [nm]
-        self.x0 = R0*np.sqrt( np.pi/self.fun_theta(self.theta_g_0) )
+        self.x0 = R0*np.sqrt( np.pi/fun_theta(self.theta_g_0) )
         print("Initial c.l. distance = "+str(self.x0)+" [nm]")
 
         # Macroscopic angle, given by circular cap (input: coordinate rescaled over R0)
         self.theta_try = self.theta_g_0
-        self.theta_g = lambda x : sc_opt.fsolve(lambda t : ( (x**2)*self.fun_theta(t)-np.pi ), self.theta_try)[0]
+        self.theta_g = lambda x : sc_opt.fsolve(lambda t : aux_fsolve(x,t), self.theta_try)[0]
         print('[TEST] : theta_g_0    = '+str(self.theta_g(self.x0/R0))+" [deg]")
         
         if Gamma == None :
@@ -128,12 +143,15 @@ class EulerMurayama :
         self.x_vec = []
         self.theta_g_vec = []
         x = RS.k*RS.x0/TWOPI
+        ##### TO OPTIMIZE #####
         for n in range(self.Nt) :
             x = x + RS.V(x)*self.dt
             self.x_vec.append(x)
             RS.theta_try = RS.theta_g(RS.m2m*x)
             self.theta_g_vec.append(RS.theta_try)
+        ##### ----------- #####
         self.x_vec = np.array(self.x_vec)
+        self.theta_g_vec = np.array(self.theta_g_vec)
         self.t_vec = np.linspace(0.0, (self.Nt-1)*self.dt, self.Nt)
 
     def simulate_sde(self, RS) :
@@ -147,11 +165,14 @@ class EulerMurayama :
             theta_g_vec_m = []
             x = RS.k*RS.x0/TWOPI
             RS.theta_try = RS.theta_g_0
+            rand_vec = rng.normal(0.0,1.0,self.Nt)
+            ##### TO OPTIMIZE #####
             for n in range(self.Nt) :
-                x = x + ( RS.V(x)*self.dt + np.sqrt(RS.Gamma*self.dt)*rng.normal(0.0,1.0)/RS.dsdx(x) )
+                x = x + ( RS.V(x)*self.dt + np.sqrt(RS.Gamma*self.dt)*rand_vec[n]/RS.dsdx(x) )
                 x_vec_m.append(x)
                 RS.theta_try = RS.theta_g(RS.m2m*x)
                 theta_g_vec_m.append(RS.theta_try)
+            ##### ----------- #####
             x_vec_m = np.array(x_vec_m)
             theta_g_vec_m = np.array(theta_g_vec_m)
             self.x_ens += x_vec_m
@@ -218,11 +239,15 @@ class EulerMurayama :
         return popt2
 
 
+#################################################################################################################
 def test_plot() :
 
-    # RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=1,theta_g_0_flat=105.8,theta_e=55.6)
+    RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=1,theta_g_0_flat=105.8,theta_e=55.6)
+
+    # Fitting problem:
     # RS = RoughSubstrate(l=4.388888888888889,mu_f=10*mu,R0=20,a=0.7777777777777777,theta_g_0_flat=105.8,theta_e=55.6)
-    RS = RoughSubstrate(l=3.0357142857142856,mu_f=5.34,R0=15,a=1,theta_g_0_flat=105.8,theta_e=55.6)
+    
+    # RS = RoughSubstrate(l=3.0357142857142856,mu_f=5.34,R0=15,a=1,theta_g_0_flat=105.8,theta_e=55.6)
 
     EM = EulerMurayama(RS=RS,t_fin=35.0,t_bin=0.1,M=20)
     EM.simulate_ode(RS)
@@ -273,7 +298,8 @@ def test_plot() :
     plt.show()
 
 
-def parametric_study(l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,theta_e=55.6,t_fin=100.0,t_bin=0.5,M=25) :
+#################################################################################################################
+def parametric_study(l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,theta_e=55.6,t_fin=100.0,t_bin=0.5,M=25,mvfit=10000) :
 
     s = (len(l_vec),len(a_vec))
     theta_w_vec = np.zeros(s)
@@ -291,7 +317,7 @@ def parametric_study(l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,theta_e=5
             EM = EulerMurayama(RS=RS,t_fin=t_fin,t_bin=t_bin,M=M)
             EM.simulate_ode(RS)
             EM.simulate_sde(RS)
-            p0 = EM.fit_cl_friction(RS,p0)
+            p0 = EM.fit_cl_friction(RS,p0,mv=mvfit)
             theta_w = RS.theta_w
             print("theta_w       = "+str(theta_w)+" [deg]")
             theta_fin_ode = EM.theta_g_vec[-1]
@@ -312,20 +338,15 @@ def parametric_study(l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,theta_e=5
     np.save('mu_f_ratio.npy',mu_f_ratio)
 
 
-FSL = 50
-FST = 35
-LBP = 60
-
-if __name__ == "__main__" :
-    
-    test_plot()
+#################################################################################################################
+def production(FSL=50, FST=35, LBP=60) :
 
     Np = 36
     
-    l_vec = np.linspace(0.25,3.5,Np)
+    l_vec = np.linspace(0.25,3.0,Np)
     # print(l_vec)
     
-    a_vec = np.linspace(0,1,Np)
+    a_vec = np.linspace(0,1.0,Np)
     # print(a_vec)
     
     np.save('l_vec.npy',l_vec)
@@ -369,11 +390,32 @@ if __name__ == "__main__" :
     cb1 = plt.colorbar(dmap1,ax=ax1)
     cb1.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
     cb1.ax.tick_params(labelsize=0.8*FST)
-    dmap2 = ax2.pcolormesh(L,A,np.log(mr),cmap=cm.plasma)
+    dmap2 = ax2.pcolormesh(L,A,np.log(mr),vmin=1,vmax=10,cmap=cm.plasma)
+    # dmap2 = ax2.pcolormesh(L,A,mr,vmin=1,vmax=500,cmap=cm.plasma)
     ax2.set_xlabel('l [nm]',fontsize=FSL)
     ax2.set_ylabel('a [1]',fontsize=FSL)
     ax2.tick_params(labelsize=FST)
     cb2 = plt.colorbar(dmap2,ax=ax2)
     cb2.ax.set_ylabel(r'$\log(\mu_f^*/\mu_f)$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
+    # cb2.ax.set_ylabel(r'$\mu_f^*/\mu_f$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
     cb2.ax.tick_params(labelsize=0.8*FST)
     plt.show()
+
+
+#################################################################################################################
+def profile() :
+
+    RS = RoughSubstrate(l=3.0357142857142856,mu_f=5.34,R0=15,a=1,theta_g_0_flat=105.8,theta_e=55.6)
+    EM = EulerMurayama(RS=RS,t_fin=35.0,t_bin=0.1,M=20)
+    EM.simulate_ode(RS)
+    EM.simulate_sde(RS)
+    EM.fit_cl_friction(RS)
+
+
+if __name__ == "__main__" :
+    
+    # test_plot()
+    production()
+
+    # import cProfile
+    # cProfile.run("profile()")
