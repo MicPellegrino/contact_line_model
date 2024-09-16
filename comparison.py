@@ -207,7 +207,7 @@ class EulerMurayama :
 
         return popt2
     
-    def fit_cl_friction_ls(self, RS, lvel=10, lacc=1, p0=None, p0_ls=[1,1,1,1,1], mv=1000) :
+    def fit_cl_friction_ls(self, RS, lvel=10, lacc=1, p0_cf=None, p0_ls=[1,1,1,1,1], mv=1000) :
 
         self.t = RS.tau*self.t_vec
         self.x = TWOPI*self.x_ens/RS.k
@@ -231,7 +231,7 @@ class EulerMurayama :
         self.v_fit = ratioder_4_2(self.t, *popt1)
 
         self.ct = cos(self.theta_g_ens)
-        popt2, pcov2 = sc_opt.curve_fit(sinh, self.ct, self.v_fit, p0, maxfev=mv)
+        popt2, _ = sc_opt.curve_fit(sinh, self.ct, self.v_fit, p0_cf, maxfev=mv)
         self.v_mkt = sinh(self.ct, *popt2)
         self.mu_f_fit = gamma/popt2[0]*popt2[2]
         print("Eff. c.l. friction    = "+str(self.mu_f_fit)+" [cP]")
@@ -242,14 +242,23 @@ class EulerMurayama :
 #################################################################################################################
 def test_plot() :
 
-    RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=1,theta_g_0_flat=105.8,theta_e=55.6)
+    # Flat surface
+    # RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=0,theta_g_0_flat=105.8,theta_e=55.6)
 
-    # Fitting problem:
-    # RS = RoughSubstrate(l=4.388888888888889,mu_f=10*mu,R0=20,a=0.7777777777777777,theta_g_0_flat=105.8,theta_e=55.6)
-    
+    # 'Nice' rough surfaces
+    # RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=1,theta_g_0_flat=105.8,theta_e=55.6)
     # RS = RoughSubstrate(l=3.0357142857142856,mu_f=5.34,R0=15,a=1,theta_g_0_flat=105.8,theta_e=55.6)
 
-    EM = EulerMurayama(RS=RS,t_fin=35.0,t_bin=0.1,M=20)
+    # 'Problematic' rough surfaces
+    # RS = RoughSubstrate(l=4.388888888888889,mu_f=10*mu,R0=20,a=0.7777777777777777,theta_g_0_flat=105.8,theta_e=55.6)
+    RS = RoughSubstrate(l=3.5,mu_f=5.66,R0=15,a=1,theta_g_0_flat=105.8,theta_e=55.6)
+
+    # One replicate
+    # EM = EulerMurayama(RS=RS,t_fin=500,t_bin=0.1,M=1)
+
+    # Several replicates
+    EM = EulerMurayama(RS=RS,t_fin=30.0,t_bin=0.1,M=20)
+    
     EM.simulate_ode(RS)
     EM.simulate_sde(RS)
 
@@ -259,6 +268,11 @@ def test_plot() :
     print("theta_fin_ode = "+str(theta_fin_ode)+" [deg]")
     theta_fin_sde = np.mean(EM.theta_g_ens[int(0.8*EM.Nt):])
     print("theta_fin_sde = "+str(theta_fin_sde)+" [deg]")
+
+    # Standard deviation (for fitting noise)
+    x_lang_eq = TWOPI*EM.x_ens[int(0.5*EM.Nt):]/RS.k
+    sigma = np.std(x_lang_eq)
+    print("Standard deviation = ", sigma, " nm")
 
     fig1, (ax1, ax2) = plt.subplots(2, 1)
     ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_vec/RS.k, 'k-', linewidth=3.0)
@@ -280,7 +294,9 @@ def test_plot() :
     ax2.tick_params(axis='y', labelsize=25)
     plt.show()
 
-    EM.fit_cl_friction(RS)
+    p0 = None
+    # EM.fit_cl_friction(RS,mv=1000)
+    EM.fit_cl_friction_ls(RS,p0_cf=p0,mv=10000)
 
     fig1, (ax1, ax2) = plt.subplots(1, 2)
     ax1.plot(EM.t, EM.x_fit)
@@ -299,7 +315,7 @@ def test_plot() :
 
 
 #################################################################################################################
-def parametric_study(l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,theta_e=55.6,t_fin=100.0,t_bin=0.5,M=25,mvfit=10000) :
+def parametric_study(noise,l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,theta_e=55.6,t_fin=100.0,t_bin=0.5,M=25,mvfit=10000) :
 
     s = (len(l_vec),len(a_vec))
     theta_w_vec = np.zeros(s)
@@ -313,11 +329,12 @@ def parametric_study(l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,theta_e=5
         for j in range(len(a_vec)) :
             n += 1
             print("[ PROGRESS "+str(n)+"/"+str(theta_w_vec.size)+" ]")
-            RS = RoughSubstrate(l=l_vec[i],mu_f=mu_f,R0=R0,a=a_vec[j],theta_g_0_flat=theta_g_0_flat,theta_e=theta_e)
+            RS = RoughSubstrate(l=l_vec[i],mu_f=mu_f,R0=R0,a=a_vec[j],theta_g_0_flat=theta_g_0_flat,theta_e=theta_e,Gamma=noise)
             EM = EulerMurayama(RS=RS,t_fin=t_fin,t_bin=t_bin,M=M)
             EM.simulate_ode(RS)
             EM.simulate_sde(RS)
-            p0 = EM.fit_cl_friction(RS,p0,mv=mvfit)
+            # p0 = EM.fit_cl_friction(RS,p0,mv=mvfit)
+            p0 = EM.fit_cl_friction_ls(RS,p0_cf=p0,mv=mvfit)
             theta_w = RS.theta_w
             print("theta_w       = "+str(theta_w)+" [deg]")
             theta_fin_ode = EM.theta_g_vec[-1]
@@ -339,11 +356,11 @@ def parametric_study(l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,theta_e=5
 
 
 #################################################################################################################
-def production(FSL=50, FST=35, LBP=60) :
+def production(FSL=50, FST=35, LBP=60, noise=None, cl_friction=10) :
 
-    Np = 36
+    Np = 40
     
-    l_vec = np.linspace(0.25,3.0,Np)
+    l_vec = np.linspace(0.5,3.5,Np)
     # print(l_vec)
     
     a_vec = np.linspace(0,1.0,Np)
@@ -357,7 +374,7 @@ def production(FSL=50, FST=35, LBP=60) :
 
     L, A = np.meshgrid(l_vec,a_vec,sparse=False,indexing='ij')
 
-    # parametric_study(l_vec,a_vec,mu_f=5.34,R0=15,M=25,t_fin=100,t_bin=0.3)
+    parametric_study(noise,l_vec,a_vec,mu_f=cl_friction,R0=15,M=25,t_fin=30,t_bin=0.1)
 
     d1 = np.load('diff_ode.npy')
     d2 = np.load('diff_sde.npy')
@@ -412,10 +429,82 @@ def profile() :
     EM.fit_cl_friction(RS)
 
 
+#################################################################################################################
+def optimize_noise(std_target,noise_ub,cl_friction=10,noise_lb=0,t_erg=1000,tol_std=0.01,tol_noise=0.001,maxit=100,plot=False) :
+
+    # Init sigma to some number that is larger than std_target+tol
+    sigma = std_target*(1+10*tol_std)
+    # Init noise in the middle
+    noise = 0.5*(noise_ub+noise_lb)
+    noise_pre = noise*(1+10*tol_noise)
+    # Init optimization iterations
+    it = 0
+    
+    while( np.abs(sigma-std_target)/std_target>tol_std and np.abs(noise-noise_pre)/noise_pre>tol_noise and it<maxit ) :
+        # Initialize flat surface
+        RS = RoughSubstrate(l=1,mu_f=cl_friction,R0=20,a=0,theta_g_0_flat=105.8,theta_e=55.6,Gamma=noise)
+        # One replicate
+        EM = EulerMurayama(RS=RS,t_fin=t_erg,t_bin=0.1,M=1)
+        EM.simulate_sde(RS)
+        # Standard deviation
+        x_lang_eq = TWOPI*EM.x_ens[int(0.25*EM.Nt):]/RS.k
+        x_lang_eq = x_lang_eq-np.mean(x_lang_eq)
+        sigma = np.std(x_lang_eq)
+        if sigma>std_target :
+            noise_ub = noise 
+            noise_lb = noise_lb
+        else :
+            noise_ub = noise_ub 
+            noise_lb = noise
+        noise_pre = noise
+        noise = 0.5*(noise_ub+noise_lb)
+        it += 1
+        print("----- -------------------------------------- -----")
+        print("iteration               ", it)
+        print("std(c.l. position)    = ", sigma, " [nm]")
+        print("----- -------------------------------------- -----")
+    print("----- Convergence!                           -----")
+    print("----- Noise (nondim.)     = ", noise, " [1]")
+    print("----- -------------------------------------- -----")
+    EM.simulate_ode(RS)
+
+    if plot :
+
+        fig1, (ax1, ax2) = plt.subplots(2, 1)
+        ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_vec/RS.k, 'k-', linewidth=3.0)
+        ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_ens/RS.k, 'r-', linewidth=2.5)
+        ax1.fill_between(RS.tau*EM.t_vec,TWOPI*(EM.x_ens+EM.x_std)/RS.k,TWOPI*(EM.x_ens-EM.x_std)/RS.k,color='r',alpha=0.5,linewidth=0.0)
+        ax1.set_ylabel(r'$x_{cl}$ [nm]', fontsize=30.0)
+        ax1.set_xlim([RS.tau*EM.t_vec[0], RS.tau*EM.t_vec[-1]])
+        ax1.tick_params(axis='x',which='both',labelbottom=False)
+        ax1.tick_params(axis='y', labelsize=25)
+        ax2.plot(RS.tau*EM.t_vec, EM.theta_g_vec, 'k-', linewidth=3.0)
+        ax2.plot(RS.tau*EM.t_vec, EM.theta_g_ens, 'r-', linewidth=2.0, label=r'$<x_{cl}>$')
+        ax2.fill_between(RS.tau*EM.t_vec,EM.theta_g_ens+EM.theta_std,EM.theta_g_ens-EM.theta_std,color='r',alpha=0.5,linewidth=0.0)
+        ax2.plot(RS.tau*EM.t_vec, RS.theta_w*np.ones(EM.t_vec.shape), 'b--', linewidth=3, label=r'$\theta_W$')
+        ax2.set_xlabel(r'$t$ [ns]', fontsize=30.0)
+        ax2.set_ylabel(r'$\theta_g$ [deg]', fontsize=30.0)
+        ax2.set_xlim([RS.tau*EM.t_vec[0], RS.tau*EM.t_vec[-1]])
+        ax2.legend(fontsize=25)
+        ax2.tick_params(axis='x', labelsize=25)
+        ax2.tick_params(axis='y', labelsize=25)
+        plt.show()
+
+        nbins = 75
+        counts, bins, bars = plt.hist(x_lang_eq,bins=nbins)
+        plt.show()
+
+    return noise
+
 if __name__ == "__main__" :
     
-    # test_plot()
-    production()
+    cl_friction_md = 5.66
+    noise_opt = 0.0054794921875
 
+    # test_plot()
+    
+    # noise_opt = optimize_noise(std_target=0.294,cl_friction=cl_friction_md,noise_ub=0.031)
+    production(noise=noise_opt,cl_friction=cl_friction_md)
+    
     # import cProfile
     # cProfile.run("profile()")
