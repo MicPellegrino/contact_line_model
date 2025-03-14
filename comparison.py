@@ -356,7 +356,7 @@ def parametric_study(noise,l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,the
 
 
 #################################################################################################################
-def production(FSL=50, FST=35, LBP=60, noise=None, cl_friction=10) :
+def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, clf_plot_cutoff=10) :
 
     Np = 40
     
@@ -374,7 +374,7 @@ def production(FSL=50, FST=35, LBP=60, noise=None, cl_friction=10) :
 
     L, A = np.meshgrid(l_vec,a_vec,sparse=False,indexing='ij')
 
-    parametric_study(noise,l_vec,a_vec,mu_f=cl_friction,R0=15,M=25,t_fin=30,t_bin=0.1)
+    # parametric_study(noise,l_vec,a_vec,mu_f=cl_friction,R0=15,M=25,t_fin=30,t_bin=0.1)
 
     d1 = np.load('diff_ode.npy')
     d2 = np.load('diff_sde.npy')
@@ -407,7 +407,7 @@ def production(FSL=50, FST=35, LBP=60, noise=None, cl_friction=10) :
     cb1 = plt.colorbar(dmap1,ax=ax1)
     cb1.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
     cb1.ax.tick_params(labelsize=0.8*FST)
-    dmap2 = ax2.pcolormesh(L,A,np.log(mr),vmin=1,vmax=10,cmap=cm.plasma)
+    dmap2 = ax2.pcolormesh(L,A,np.log(mr),vmin=1,vmax=clf_plot_cutoff,cmap=cm.plasma)
     # dmap2 = ax2.pcolormesh(L,A,mr,vmin=1,vmax=500,cmap=cm.plasma)
     ax2.set_xlabel('l [nm]',fontsize=FSL)
     ax2.set_ylabel('a [1]',fontsize=FSL)
@@ -504,7 +504,7 @@ if __name__ == "__main__" :
     # test_plot()
     
     # noise_opt = optimize_noise(std_target=0.294,cl_friction=cl_friction_md,noise_ub=0.031)
-    production(noise=noise_opt,cl_friction=cl_friction_md)
+    production(noise=noise_opt,cl_friction=cl_friction_md,clf_plot_cutoff=30)
     
     # import cProfile
     # cProfile.run("profile()")
