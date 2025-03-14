@@ -9,6 +9,13 @@ import scipy.special as sc_spc
 
 from numba import jit
 
+# To speedup the SDE simulation
+from mpi4py import MPI
+MPI_COMM = MPI.COMM_WORLD
+MPI_RANK = MPI_COMM.Get_rank()
+MPI_SIZE = MPI_COMM.Get_size()
+MPI_ROOT = 0
+
 # Rational polynomial fit
 def rational(x, p, q) :
     return np.polyval(p, x) / np.polyval(q + [1.0], x)
@@ -33,10 +40,8 @@ sinh = lambda x, a, b, c : a*np.sinh(b-c*x)
 # GLOBAL VARIABLES (FOR WATER-VAPOR)
 # Surface tension [mPa*m]
 gamma = 57.8
-print("Surface tension       = "+str(gamma)+" [mPa*m]")
 # Bulk viscosity [mPa*s]
 mu = 0.69
-print("Bulk viscosity        = "+str(mu)+" [mPa*s]")
 # Self expl.
 TWOPI = 360
 # Temperature [K]
@@ -46,6 +51,9 @@ kB = 0.1380649
 # Depth [nm]
 Ly = 4.67650
 
+if MPI_RANK == MPI_ROOT :
+    print("Surface tension       = "+str(gamma)+" [mPa*m]")
+    print("Bulk viscosity        = "+str(mu)+" [mPa*s]")
 
 # Reduced droplet area [nondim]
 @jit(nopython=True)
@@ -63,30 +71,29 @@ class RoughSubstrate :
 
     def __init__(self, l, mu_f, R0, a, theta_g_0_flat, theta_e, Gamma=None) :
 
-        # C.l. friction [cP]
-        print("C.l. friction         = "+str(mu_f)+" [cP]")
-        # Corrugation wavelength [nm]
-        print("Corrugation length    = "+str(l)+" [nm]")
         # Corrugation number [1/nm]
         self.k = TWOPI/l
-        print("Corrugation number    = "+str(self.k)+" [1/nm]")
         # Droplet radius [nm]
         self.R0 = R0
-        print("Droplet radius        = "+str(R0)+" [nm]")
         # Roughness coefficient 'a' [nondim]
         self.a = a
-        print("Roughness coefficient = "+str(a)+" [1]")
-        # Initial c.a. on a flat surface [deg]
-        print("Initial c.a. on flat  = "+str(theta_g_0_flat)+" [deg]")
         # Equilibrium c.a. on a flat surface [deg]
         self.theta_e = theta_e
-        print("Equilibrium c. a.     = "+str(theta_e)+" [deg]")
         # Reference time [ns]
         self.tau = TWOPI*mu_f/(gamma*self.k)
-        print("Reference time        = "+str(self.tau)+" [ns]")
         # Corrugation height [nm]
         h = a/self.k
-        print("Corrugation height    = "+str(h)+" [nm]")
+
+        if MPI_RANK == MPI_ROOT :
+            print("C.l. friction         = "+str(mu_f)+" [cP]")
+            print("Corrugation length    = "+str(l)+" [nm]")
+            print("Corrugation number    = "+str(self.k)+" [1/nm]")
+            print("Droplet radius        = "+str(R0)+" [nm]")
+            print("Roughness coefficient = "+str(a)+" [1]")
+            print("Initial c.a. on flat  = "+str(theta_g_0_flat)+" [deg]")
+            print("Equilibrium c. a.     = "+str(theta_e)+" [deg]")
+            print("Reference time        = "+str(self.tau)+" [ns]")
+            print("Corrugation height    = "+str(h)+" [nm]")
 
         ### Conversion from 'micro-to-macro' ###
         self.m2m = TWOPI/(self.k*R0)
@@ -97,25 +104,27 @@ class RoughSubstrate :
         self.theta_w = cos_m1(self.rough_parameter*cos(theta_e))
         # Contact angles [deg]
         self.theta_g_0 = cos_m1(self.rough_parameter*cos(theta_g_0_flat))
-        print("Initial c. a          = "+str(self.theta_g_0)+" [deg]")
 
         # Initial reduced droplet area [nondim]
         # self.fun_theta = lambda t : ( np.deg2rad(t)/(sin(t)**2) - cot(t) )
 
         # Initial wetted distance [nm]
         self.x0 = R0*np.sqrt( np.pi/fun_theta(self.theta_g_0) )
-        print("Initial c.l. distance = "+str(self.x0)+" [nm]")
 
         # Macroscopic angle, given by circular cap (input: coordinate rescaled over R0)
         self.theta_try = self.theta_g_0
         self.theta_g = lambda x : sc_opt.fsolve(lambda t : aux_fsolve(x,t), self.theta_try)[0]
-        print('[TEST] : theta_g_0    = '+str(self.theta_g(self.x0/R0))+" [deg]")
         
         if Gamma == None :
             self.Gamma = (2*kB*T)/(Ly*l*10*gamma)
         else :
             self.Gamma = Gamma
-        print("Noise (nondim.)       = "+str(self.Gamma)+" [1]")
+
+        if MPI_RANK == MPI_ROOT :
+            print("Initial c. a          = "+str(self.theta_g_0)+" [deg]")
+            print("Initial c.l. distance = "+str(self.x0)+" [nm]")
+            print('[TEST] : theta_g_0    = '+str(self.theta_g(self.x0/R0))+" [deg]")
+            print("Noise (nondim.)       = "+str(self.Gamma)+" [1]")
 
         # Microscopic angle (input: coordinate rescaled over the wavelength)
         self.phi = lambda x : self.theta_g(self.m2m*x) + tan_m1(self.a*cos(TWOPI*x))
@@ -129,15 +138,17 @@ class RoughSubstrate :
 class EulerMurayama :
 
     def __init__(self, RS, t_fin, t_bin, M) :
-        print("Final time            = "+str(t_fin)+" [ns]")
         self.T_fin = t_fin/RS.tau
         self.T_bin = t_bin/RS.tau
         self.dt = 0.1*self.T_bin
         self.Nt = int(self.T_fin/self.dt)
-        print("T_fin (nondim.)       = "+str(self.T_fin)+" [1]")
-        print("dt (nondim.)          = "+str(self.dt)+" [1]")
         self.M = M
-        print("#replicas             = "+str(M))
+
+        if MPI_RANK == MPI_ROOT :
+            print("Final time            = "+str(t_fin)+" [ns]")
+            print("T_fin (nondim.)       = "+str(self.T_fin)+" [1]")
+            print("dt (nondim.)          = "+str(self.dt)+" [1]")
+            print("#replicas             = "+str(M))
 
     def simulate_ode(self, RS) :
         self.x_vec = []
@@ -159,26 +170,45 @@ class EulerMurayama :
         self.x2_ens = np.zeros(self.Nt)
         self.theta_g_ens = np.zeros(self.Nt)
         self.theta_g2_ens = np.zeros(self.Nt)
-        for m in range(self.M) :
-            print("Sim. replica "+str(m+1))
-            x_vec_m = []
-            theta_g_vec_m = []
+        x_vec_m = np.zeros(self.Nt)
+        x_vec_m2 = np.zeros(self.Nt)
+        theta_g_vec_m = np.zeros(self.Nt)
+        theta_g_vec_m2 = np.zeros(self.Nt)
+        ##### This could be trivially parallelized with mpi4py! #####
+        # for m in range(self.M) :
+        if MPI_RANK == MPI_ROOT :
+            print("Simulating "+str(self.M)+" replicates")
+        for m in range(MPI_RANK, self.M, MPI_SIZE) :
+            # print("Rank "+str(MPI_RANK)+" is simulating replica "+str(m+1))
+            x_vec_m_loc = []
+            theta_g_vec_m_loc = []
             x = RS.k*RS.x0/TWOPI
             RS.theta_try = RS.theta_g_0
             rand_vec = rng.normal(0.0,1.0,self.Nt)
             ##### TO OPTIMIZE #####
             for n in range(self.Nt) :
                 x = x + ( RS.V(x)*self.dt + np.sqrt(RS.Gamma*self.dt)*rand_vec[n]/RS.dsdx(x) )
-                x_vec_m.append(x)
+                x_vec_m_loc.append(x)
                 RS.theta_try = RS.theta_g(RS.m2m*x)
-                theta_g_vec_m.append(RS.theta_try)
+                theta_g_vec_m_loc.append(RS.theta_try)
             ##### ----------- #####
-            x_vec_m = np.array(x_vec_m)
-            theta_g_vec_m = np.array(theta_g_vec_m)
-            self.x_ens += x_vec_m
-            self.x2_ens += x_vec_m*x_vec_m
-            self.theta_g_ens += theta_g_vec_m
-            self.theta_g2_ens += theta_g_vec_m*theta_g_vec_m
+            x_vec_m_loc = np.array(x_vec_m_loc)
+            x_vec_m += x_vec_m_loc
+            x_vec_m2 += x_vec_m_loc*x_vec_m_loc
+            theta_g_vec_m_loc = np.array(theta_g_vec_m_loc)
+            theta_g_vec_m += theta_g_vec_m_loc
+            theta_g_vec_m2 += theta_g_vec_m_loc*theta_g_vec_m_loc
+            ##### Only these should be gathered/reduced by rank 0 #####
+            # self.x_ens += x_vec_m
+            # self.x2_ens += x_vec_m*x_vec_m
+            # self.theta_g_ens += theta_g_vec_m
+            # self.theta_g2_ens += theta_g_vec_m*theta_g_vec_m
+            ##### ----------------------------------------------- #####
+        MPI_COMM.Allreduce([x_vec_m, MPI.DOUBLE], [self.x_ens, MPI.DOUBLE], op=MPI.SUM)
+        MPI_COMM.Allreduce([x_vec_m2, MPI.DOUBLE], [self.x2_ens, MPI.DOUBLE], op=MPI.SUM)
+        MPI_COMM.Allreduce([theta_g_vec_m, MPI.DOUBLE], [self.theta_g_ens, MPI.DOUBLE], op=MPI.SUM)
+        MPI_COMM.Allreduce([theta_g_vec_m2, MPI.DOUBLE], [self.theta_g2_ens, MPI.DOUBLE], op=MPI.SUM)
+        ##### ------------------------------------------------- #####
         self.x2_ens /= self.M
         self.x_ens /= self.M
         self.x_var = (self.x2_ens-self.x_ens*self.x_ens)
@@ -203,7 +233,8 @@ class EulerMurayama :
         popt2, pcov2 = sc_opt.curve_fit(sinh, self.ct, self.v_fit, p0, maxfev=mv)
         self.v_mkt = sinh(self.ct, *popt2)
         self.mu_f_fit = gamma/popt2[0]*popt2[2]
-        print("Eff. c.l. friction    = "+str(self.mu_f_fit)+" [cP]")
+        if MPI_RANK == MPI_ROOT :
+            print("Eff. c.l. friction    = "+str(self.mu_f_fit)+" [cP]")
 
         return popt2
     
@@ -234,84 +265,90 @@ class EulerMurayama :
         popt2, _ = sc_opt.curve_fit(sinh, self.ct, self.v_fit, p0_cf, maxfev=mv)
         self.v_mkt = sinh(self.ct, *popt2)
         self.mu_f_fit = gamma/popt2[0]*popt2[2]
-        print("Eff. c.l. friction    = "+str(self.mu_f_fit)+" [cP]")
+        if MPI_RANK == MPI_ROOT :
+            print("Eff. c.l. friction    = "+str(self.mu_f_fit)+" [cP]")
 
         return popt2
 
 
 #################################################################################################################
-def test_plot() :
+def test_plot(M=1) :
 
     # Flat surface
     # RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=0,theta_g_0_flat=105.8,theta_e=55.6)
 
     # 'Nice' rough surfaces
-    # RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=1,theta_g_0_flat=105.8,theta_e=55.6)
+    RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=1,theta_g_0_flat=105.8,theta_e=55.6)
     # RS = RoughSubstrate(l=3.0357142857142856,mu_f=5.34,R0=15,a=1,theta_g_0_flat=105.8,theta_e=55.6)
 
     # 'Problematic' rough surfaces
     # RS = RoughSubstrate(l=4.388888888888889,mu_f=10*mu,R0=20,a=0.7777777777777777,theta_g_0_flat=105.8,theta_e=55.6)
-    RS = RoughSubstrate(l=3.5,mu_f=5.66,R0=15,a=1,theta_g_0_flat=105.8,theta_e=55.6)
+    # RS = RoughSubstrate(l=3.5,mu_f=5.66,R0=15,a=1,theta_g_0_flat=105.8,theta_e=55.6)
 
     # One replicate
-    # EM = EulerMurayama(RS=RS,t_fin=500,t_bin=0.1,M=1)
+    # EM = EulerMurayama(RS=RS,t_fin=500,t_bin=0.1,M=M)
 
     # Several replicates
-    EM = EulerMurayama(RS=RS,t_fin=30.0,t_bin=0.1,M=20)
+    EM = EulerMurayama(RS=RS,t_fin=30.0,t_bin=0.1,M=M)
     
     EM.simulate_ode(RS)
     EM.simulate_sde(RS)
 
     theta_w = RS.theta_w
-    print("theta_w       = "+str(theta_w)+" [deg]")
     theta_fin_ode = EM.theta_g_vec[-1]
-    print("theta_fin_ode = "+str(theta_fin_ode)+" [deg]")
     theta_fin_sde = np.mean(EM.theta_g_ens[int(0.8*EM.Nt):])
-    print("theta_fin_sde = "+str(theta_fin_sde)+" [deg]")
 
     # Standard deviation (for fitting noise)
     x_lang_eq = TWOPI*EM.x_ens[int(0.5*EM.Nt):]/RS.k
     sigma = np.std(x_lang_eq)
-    print("Standard deviation = ", sigma, " nm")
 
-    fig1, (ax1, ax2) = plt.subplots(2, 1)
-    ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_vec/RS.k, 'k-', linewidth=3.0)
-    ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_ens/RS.k, 'r-', linewidth=2.5)
-    ax1.fill_between(RS.tau*EM.t_vec,TWOPI*(EM.x_ens+EM.x_std)/RS.k,TWOPI*(EM.x_ens-EM.x_std)/RS.k,color='r',alpha=0.5,linewidth=0.0)
-    ax1.set_ylabel(r'$x_{cl}$ [nm]', fontsize=30.0)
-    ax1.set_xlim([RS.tau*EM.t_vec[0], RS.tau*EM.t_vec[-1]])
-    ax1.tick_params(axis='x',which='both',labelbottom=False)
-    ax1.tick_params(axis='y', labelsize=25)
-    ax2.plot(RS.tau*EM.t_vec, EM.theta_g_vec, 'k-', linewidth=3.0)
-    ax2.plot(RS.tau*EM.t_vec, EM.theta_g_ens, 'r-', linewidth=2.0, label=r'$<x_{cl}>$')
-    ax2.fill_between(RS.tau*EM.t_vec,EM.theta_g_ens+EM.theta_std,EM.theta_g_ens-EM.theta_std,color='r',alpha=0.5,linewidth=0.0)
-    ax2.plot(RS.tau*EM.t_vec, RS.theta_w*np.ones(EM.t_vec.shape), 'b--', linewidth=3, label=r'$\theta_W$')
-    ax2.set_xlabel(r'$t$ [ns]', fontsize=30.0)
-    ax2.set_ylabel(r'$\theta_g$ [deg]', fontsize=30.0)
-    ax2.set_xlim([RS.tau*EM.t_vec[0], RS.tau*EM.t_vec[-1]])
-    ax2.legend(fontsize=25)
-    ax2.tick_params(axis='x', labelsize=25)
-    ax2.tick_params(axis='y', labelsize=25)
-    plt.show()
+    if MPI_RANK == MPI_ROOT :
+        print("theta_w       = "+str(theta_w)+" [deg]")
+        print("theta_fin_ode = "+str(theta_fin_ode)+" [deg]")
+        print("theta_fin_sde = "+str(theta_fin_sde)+" [deg]")
+        print("Standard deviation = ", sigma, " nm")
+
+    if MPI_RANK == MPI_ROOT :
+        fig1, (ax1, ax2) = plt.subplots(2, 1)
+        ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_vec/RS.k, 'k-', linewidth=3.0)
+        ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_ens/RS.k, 'r-', linewidth=2.5)
+        ax1.fill_between(RS.tau*EM.t_vec,TWOPI*(EM.x_ens+EM.x_std)/RS.k,TWOPI*(EM.x_ens-EM.x_std)/RS.k,color='r',alpha=0.5,linewidth=0.0)
+        ax1.set_ylabel(r'$x_{cl}$ [nm]', fontsize=30.0)
+        ax1.set_xlim([RS.tau*EM.t_vec[0], RS.tau*EM.t_vec[-1]])
+        ax1.tick_params(axis='x',which='both',labelbottom=False)
+        ax1.tick_params(axis='y', labelsize=25)
+        ax2.plot(RS.tau*EM.t_vec, EM.theta_g_vec, 'k-', linewidth=3.0)
+        ax2.plot(RS.tau*EM.t_vec, EM.theta_g_ens, 'r-', linewidth=2.0, label=r'$<x_{cl}>$')
+        ax2.fill_between(RS.tau*EM.t_vec,EM.theta_g_ens+EM.theta_std,EM.theta_g_ens-EM.theta_std,color='r',alpha=0.5,linewidth=0.0)
+        ax2.plot(RS.tau*EM.t_vec, RS.theta_w*np.ones(EM.t_vec.shape), 'b--', linewidth=3, label=r'$\theta_W$')
+        ax2.set_xlabel(r'$t$ [ns]', fontsize=30.0)
+        ax2.set_ylabel(r'$\theta_g$ [deg]', fontsize=30.0)
+        ax2.set_xlim([RS.tau*EM.t_vec[0], RS.tau*EM.t_vec[-1]])
+        ax2.legend(fontsize=25)
+        ax2.tick_params(axis='x', labelsize=25)
+        ax2.tick_params(axis='y', labelsize=25)
+        plt.show()
 
     p0 = None
     # EM.fit_cl_friction(RS,mv=1000)
     EM.fit_cl_friction_ls(RS,p0_cf=p0,mv=10000)
 
-    fig1, (ax1, ax2) = plt.subplots(1, 2)
-    ax1.plot(EM.t, EM.x_fit)
-    ax1.plot(EM.t, EM.x)
-    ax2.plot(EM.t, EM.v_fit)
-    plt.show()
+    if MPI_RANK == MPI_ROOT :
+        
+        fig1, (ax1, ax2) = plt.subplots(1, 2)
+        ax1.plot(EM.t, EM.x_fit)
+        ax1.plot(EM.t, EM.x)
+        ax2.plot(EM.t, EM.v_fit)
+        plt.show()
 
-    plt.plot(EM.ct, EM.v_fit, 'k-', linewidth=3.0)
-    plt.plot(EM.ct, EM.v_mkt, 'r-', linewidth=3.0, label='MKT fit')
-    plt.tick_params(axis='x', labelsize=25)
-    plt.tick_params(axis='y', labelsize=25)
-    plt.legend(fontsize=25)
-    plt.xlabel(r'$\cos<\theta_g>$ []', fontsize=30.0)
-    plt.ylabel(r'$<u_{cl}>$ [nm/ns]', fontsize=30.0)
-    plt.show()
+        plt.plot(EM.ct, EM.v_fit, 'k-', linewidth=3.0)
+        plt.plot(EM.ct, EM.v_mkt, 'r-', linewidth=3.0, label='MKT fit')
+        plt.tick_params(axis='x', labelsize=25)
+        plt.tick_params(axis='y', labelsize=25)
+        plt.legend(fontsize=25)
+        plt.xlabel(r'$\cos<\theta_g>$ []', fontsize=30.0)
+        plt.ylabel(r'$<u_{cl}>$ [nm/ns]', fontsize=30.0)
+        plt.show()
 
 
 #################################################################################################################
@@ -328,7 +365,8 @@ def parametric_study(noise,l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,the
     for i in range(len(l_vec)) :
         for j in range(len(a_vec)) :
             n += 1
-            print("[ PROGRESS "+str(n)+"/"+str(theta_w_vec.size)+" ]")
+            if MPI_RANK == MPI_ROOT :
+                print("[ PROGRESS "+str(n)+"/"+str(theta_w_vec.size)+" ]")
             RS = RoughSubstrate(l=l_vec[i],mu_f=mu_f,R0=R0,a=a_vec[j],theta_g_0_flat=theta_g_0_flat,theta_e=theta_e,Gamma=noise)
             EM = EulerMurayama(RS=RS,t_fin=t_fin,t_bin=t_bin,M=M)
             EM.simulate_ode(RS)
@@ -336,87 +374,95 @@ def parametric_study(noise,l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,the
             # p0 = EM.fit_cl_friction(RS,p0,mv=mvfit)
             p0 = EM.fit_cl_friction_ls(RS,p0_cf=p0,mv=mvfit)
             theta_w = RS.theta_w
-            print("theta_w       = "+str(theta_w)+" [deg]")
             theta_fin_ode = EM.theta_g_vec[-1]
-            print("theta_fin_ode = "+str(theta_fin_ode)+" [deg]")
             theta_fin_sde = np.mean(EM.theta_g_ens[int(0.8*EM.Nt):])
-            print("theta_fin_sde = "+str(theta_fin_sde)+" [deg]")
-            print("# ######################################## #")
             theta_w_vec[i,j] = theta_w
             theta_fin_ode_vec[i,j] = theta_fin_ode
             theta_fin_sde_vec[i,j] = theta_fin_sde
             mu_f_ratio[i,j] = EM.mu_f_fit/mu_f
+            if MPI_RANK == MPI_ROOT :
+                print("theta_w       = "+str(theta_w)+" [deg]")
+                print("theta_fin_ode = "+str(theta_fin_ode)+" [deg]")
+                print("theta_fin_sde = "+str(theta_fin_sde)+" [deg]")
+                print("# ######################################## #")
 
     diff_ode = np.abs(theta_fin_ode_vec-theta_w_vec)
     diff_sde = np.abs(theta_fin_sde_vec-theta_w_vec)
 
-    np.save('diff_ode.npy',diff_ode)
-    np.save('diff_sde.npy',diff_sde)
-    np.save('mu_f_ratio.npy',mu_f_ratio)
+    if MPI_RANK == MPI_ROOT :
+        np.save('diff_ode.npy',diff_ode)
+        np.save('diff_sde.npy',diff_sde)
+        np.save('mu_f_ratio.npy',mu_f_ratio)
 
 
 #################################################################################################################
-def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, clf_plot_cutoff=10) :
-
-    Np = 40
+def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, clf_plot_cutoff=10, M=25, Np=40) :
     
     l_vec = np.linspace(0.5,3.5,Np)
-    # print(l_vec)
-    
     a_vec = np.linspace(0,1.0,Np)
-    # print(a_vec)
-    
-    np.save('l_vec.npy',l_vec)
-    np.save('a_vec.npy',a_vec)
 
-    l_vec = np.load('l_vec.npy')
-    a_vec = np.load('a_vec.npy')
+    # if MPI_RANK == MPI_ROOT :
+        # print(l_vec)
+        # print(a_vec)
+        # np.save('l_vec.npy',l_vec)
+        # np.save('a_vec.npy',a_vec)
+
+    # TODO: Should be broadcasted from root!
+    # l_vec = np.load('l_vec.npy')
+    # a_vec = np.load('a_vec.npy')
 
     L, A = np.meshgrid(l_vec,a_vec,sparse=False,indexing='ij')
 
-    # parametric_study(noise,l_vec,a_vec,mu_f=cl_friction,R0=15,M=25,t_fin=30,t_bin=0.1)
+    parametric_study(noise,l_vec,a_vec,mu_f=cl_friction,R0=15,M=M,t_fin=30,t_bin=0.1)
 
-    d1 = np.load('diff_ode.npy')
-    d2 = np.load('diff_sde.npy')
-    mr = np.load('mu_f_ratio.npy')
+    if MPI_RANK == MPI_ROOT :
+        d1 = np.load('diff_ode.npy')
+        d2 = np.load('diff_sde.npy')
+        mr = np.load('mu_f_ratio.npy')
 
-    vmax = max(np.max(d1),np.max(d2))
-    fig1, (ax1, ax2) = plt.subplots(1, 2)
-    dmap1 = ax1.pcolormesh(L,A,d1,vmin=0,vmax=vmax,cmap=cm.plasma)
-    ax1.set_xlabel('l [nm]',fontsize=FSL)
-    ax1.set_ylabel('a [1]',fontsize=FSL)
-    ax1.tick_params(labelsize=FST)
-    cb1 = plt.colorbar(dmap1,ax=ax1)
-    cb1.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
-    cb1.ax.tick_params(labelsize=0.8*FST)
-    dmap2 = ax2.pcolormesh(L,A,d2,vmin=0,vmax=vmax,cmap=cm.plasma)
-    ax2.set_xlabel('l [nm]',fontsize=FSL)
-    ax2.set_ylabel('a [1]',fontsize=FSL)
-    ax2.tick_params(labelsize=FST)
-    cb2 = plt.colorbar(dmap2,ax=ax2)
-    cb2.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
-    cb2.ax.tick_params(labelsize=0.8*FST)
-    plt.show()
+    if MPI_RANK == MPI_ROOT :
 
-    vmax = max(np.max(d1),np.max(d2))
-    fig1, (ax1, ax2) = plt.subplots(1, 2)
-    dmap1 = ax1.pcolormesh(L,A,d2,vmin=0,vmax=vmax,cmap=cm.plasma)
-    ax1.set_xlabel('l [nm]',fontsize=FSL)
-    ax1.set_ylabel('a [1]',fontsize=FSL)
-    ax1.tick_params(labelsize=FST)
-    cb1 = plt.colorbar(dmap1,ax=ax1)
-    cb1.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
-    cb1.ax.tick_params(labelsize=0.8*FST)
-    dmap2 = ax2.pcolormesh(L,A,np.log(mr),vmin=1,vmax=clf_plot_cutoff,cmap=cm.plasma)
-    # dmap2 = ax2.pcolormesh(L,A,mr,vmin=1,vmax=500,cmap=cm.plasma)
-    ax2.set_xlabel('l [nm]',fontsize=FSL)
-    ax2.set_ylabel('a [1]',fontsize=FSL)
-    ax2.tick_params(labelsize=FST)
-    cb2 = plt.colorbar(dmap2,ax=ax2)
-    cb2.ax.set_ylabel(r'$\log(\mu_f^*/\mu_f)$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
-    # cb2.ax.set_ylabel(r'$\mu_f^*/\mu_f$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
-    cb2.ax.tick_params(labelsize=0.8*FST)
-    plt.show()
+        vmax = max(np.max(d1),np.max(d2))
+
+        fig1, (ax1, ax2) = plt.subplots(1, 2)
+        dmap1 = ax1.pcolormesh(L,A,d1,vmin=0,vmax=vmax,cmap=cm.plasma)
+        ax1.set_xlabel('l [nm]',fontsize=FSL)
+        ax1.set_ylabel('a [1]',fontsize=FSL)
+        ax1.tick_params(labelsize=FST)
+        cb1 = plt.colorbar(dmap1,ax=ax1)
+        cb1.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
+        cb1.ax.tick_params(labelsize=0.8*FST)
+        dmap2 = ax2.pcolormesh(L,A,d2,vmin=0,vmax=vmax,cmap=cm.plasma)
+        ax2.set_xlabel('l [nm]',fontsize=FSL)
+        ax2.set_ylabel('a [1]',fontsize=FSL)
+        ax2.tick_params(labelsize=FST)
+        cb2 = plt.colorbar(dmap2,ax=ax2)
+        cb2.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
+        cb2.ax.tick_params(labelsize=0.8*FST)
+        plt.show()
+
+    if MPI_RANK == MPI_ROOT :
+
+        vmax = max(np.max(d1),np.max(d2))
+
+        fig1, (ax1, ax2) = plt.subplots(1, 2)
+        dmap1 = ax1.pcolormesh(L,A,d2,vmin=0,vmax=vmax,cmap=cm.plasma)
+        ax1.set_xlabel('l [nm]',fontsize=FSL)
+        ax1.set_ylabel('a [1]',fontsize=FSL)
+        ax1.tick_params(labelsize=FST)
+        cb1 = plt.colorbar(dmap1,ax=ax1)
+        cb1.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
+        cb1.ax.tick_params(labelsize=0.8*FST)
+        dmap2 = ax2.pcolormesh(L,A,np.log(mr),vmin=1,vmax=clf_plot_cutoff,cmap=cm.plasma)
+        # dmap2 = ax2.pcolormesh(L,A,mr,vmin=1,vmax=500,cmap=cm.plasma)
+        ax2.set_xlabel('l [nm]',fontsize=FSL)
+        ax2.set_ylabel('a [1]',fontsize=FSL)
+        ax2.tick_params(labelsize=FST)
+        cb2 = plt.colorbar(dmap2,ax=ax2)
+        cb2.ax.set_ylabel(r'$\log(\mu_f^*/\mu_f)$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
+        # cb2.ax.set_ylabel(r'$\mu_f^*/\mu_f$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
+        cb2.ax.tick_params(labelsize=0.8*FST)
+        plt.show()
 
 
 #################################################################################################################
@@ -459,13 +505,15 @@ def optimize_noise(std_target,noise_ub,cl_friction=10,noise_lb=0,t_erg=1000,tol_
         noise_pre = noise
         noise = 0.5*(noise_ub+noise_lb)
         it += 1
+        if MPI_RANK == MPI_ROOT :
+            print("----- -------------------------------------- -----")
+            print("iteration               ", it)
+            print("std(c.l. position)    = ", sigma, " [nm]")
+            print("----- -------------------------------------- -----")
+    if MPI_RANK == MPI_ROOT :
+        print("----- Convergence!                           -----")
+        print("----- Noise (nondim.)     = ", noise, " [1]")
         print("----- -------------------------------------- -----")
-        print("iteration               ", it)
-        print("std(c.l. position)    = ", sigma, " [nm]")
-        print("----- -------------------------------------- -----")
-    print("----- Convergence!                           -----")
-    print("----- Noise (nondim.)     = ", noise, " [1]")
-    print("----- -------------------------------------- -----")
     EM.simulate_ode(RS)
 
     if plot :
@@ -501,10 +549,10 @@ if __name__ == "__main__" :
     cl_friction_md = 5.66
     noise_opt = 0.0054794921875
 
-    # test_plot()
+    # test_plot(M=128)
     
     # noise_opt = optimize_noise(std_target=0.294,cl_friction=cl_friction_md,noise_ub=0.031)
-    production(noise=noise_opt,cl_friction=cl_friction_md,clf_plot_cutoff=30)
+    production(noise=noise_opt,cl_friction=cl_friction_md,clf_plot_cutoff=30, M=56)
     
     # import cProfile
     # cProfile.run("profile()")
