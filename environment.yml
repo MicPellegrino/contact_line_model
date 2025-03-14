@@ -1,0 +1,38 @@
+name: cl-friction
+
+channels:
+
+  - conda-forge
+
+
+dependencies:
+
+  - python
+
+  # Jupyer notebook and typical python tools:
+  - notebook=6.5.5
+  # - jupyter
+  # - ipympl
+  # - ipykernel
+  # - ipywidgets
+
+  # Typical tools
+  - matplotlib
+  - numpy
+  - scipy
+
+  # For JIT
+  - numba
+
+  # To run in parallel (maybe future development)
+  - mpi4py
+
+  # Pytorch stuff:
+  # - nvidia::cudatoolkit=11.8
+  # - pytorch
+  # - torchvision
+  # - torchaudio
+
+  # Other potentially useful stuff:
+  # - pandas
+  # - seaborn
