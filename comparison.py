@@ -3,6 +3,9 @@ import numpy.random as rng
 
 import matplotlib.pyplot as plt
 from matplotlib import cm
+from matplotlib import rc
+rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
+rc('text', usetex=True)
 
 import scipy.optimize as sc_opt
 import scipy.special as sc_spc
@@ -278,7 +281,8 @@ def test_plot(M=1) :
     # RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=0,theta_g_0_flat=105.8,theta_e=55.6)
 
     # 'Nice' rough surfaces
-    RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=1,theta_g_0_flat=105.8,theta_e=55.6)
+    RS = RoughSubstrate(l=1,mu_f=5.66,R0=20,a=0.2,theta_g_0_flat=105.8,theta_e=55.6)
+    # RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=1,theta_g_0_flat=105.8,theta_e=55.6)
     # RS = RoughSubstrate(l=3.0357142857142856,mu_f=5.34,R0=15,a=1,theta_g_0_flat=105.8,theta_e=55.6)
 
     # 'Problematic' rough surfaces
@@ -310,15 +314,16 @@ def test_plot(M=1) :
 
     if MPI_RANK == MPI_ROOT :
         fig1, (ax1, ax2) = plt.subplots(2, 1)
-        ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_vec/RS.k, 'k-', linewidth=3.0)
-        ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_ens/RS.k, 'r-', linewidth=2.5)
+        ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_vec/RS.k, 'k-', linewidth=3.0, label=r'eq. 4')
+        ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_ens/RS.k, 'r-', linewidth=2.5, label=r'eq. 6')
         ax1.fill_between(RS.tau*EM.t_vec,TWOPI*(EM.x_ens+EM.x_std)/RS.k,TWOPI*(EM.x_ens-EM.x_std)/RS.k,color='r',alpha=0.5,linewidth=0.0)
         ax1.set_ylabel(r'$x_{cl}$ [nm]', fontsize=30.0)
         ax1.set_xlim([RS.tau*EM.t_vec[0], RS.tau*EM.t_vec[-1]])
+        ax1.legend(fontsize=25)
         ax1.tick_params(axis='x',which='both',labelbottom=False)
         ax1.tick_params(axis='y', labelsize=25)
         ax2.plot(RS.tau*EM.t_vec, EM.theta_g_vec, 'k-', linewidth=3.0)
-        ax2.plot(RS.tau*EM.t_vec, EM.theta_g_ens, 'r-', linewidth=2.0, label=r'$<x_{cl}>$')
+        ax2.plot(RS.tau*EM.t_vec, EM.theta_g_ens, 'r-', linewidth=2.0)
         ax2.fill_between(RS.tau*EM.t_vec,EM.theta_g_ens+EM.theta_std,EM.theta_g_ens-EM.theta_std,color='r',alpha=0.5,linewidth=0.0)
         ax2.plot(RS.tau*EM.t_vec, RS.theta_w*np.ones(EM.t_vec.shape), 'b--', linewidth=3, label=r'$\theta_W$')
         ax2.set_xlabel(r'$t$ [ns]', fontsize=30.0)
@@ -342,7 +347,7 @@ def test_plot(M=1) :
         plt.show()
 
         plt.plot(EM.ct, EM.v_fit, 'k-', linewidth=3.0)
-        plt.plot(EM.ct, EM.v_mkt, 'r-', linewidth=3.0, label='MKT fit')
+        plt.plot(EM.ct, EM.v_mkt, 'r-', linewidth=3.0, label='fit eq. 7')
         plt.tick_params(axis='x', labelsize=25)
         plt.tick_params(axis='y', labelsize=25)
         plt.legend(fontsize=25)
@@ -549,10 +554,10 @@ if __name__ == "__main__" :
     cl_friction_md = 5.66
     noise_opt = 0.0054794921875
 
-    # test_plot(M=128)
+    test_plot(M=28)
     
     # noise_opt = optimize_noise(std_target=0.294,cl_friction=cl_friction_md,noise_ub=0.031)
-    production(noise=noise_opt,cl_friction=cl_friction_md,clf_plot_cutoff=30, M=56)
+    # production(noise=noise_opt,cl_friction=cl_friction_md,clf_plot_cutoff=30, M=56)
     
     # import cProfile
     # cProfile.run("profile()")
