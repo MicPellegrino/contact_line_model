@@ -444,6 +444,7 @@ def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, clf_plot_cuto
         cb2 = plt.colorbar(dmap2,ax=ax2)
         cb2.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
         cb2.ax.tick_params(labelsize=0.8*FST)
+        plt.savefig('ca-hysteresis.png')
         plt.show()
 
     if MPI_RANK == MPI_ROOT :
@@ -467,6 +468,7 @@ def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, clf_plot_cuto
         cb2.ax.set_ylabel(r'$\log(\mu_f^*/\mu_f)$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
         # cb2.ax.set_ylabel(r'$\mu_f^*/\mu_f$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
         cb2.ax.tick_params(labelsize=0.8*FST)
+        plt.savefig('friction-amplification.png')
         plt.show()
 
 
