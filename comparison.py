@@ -551,13 +551,13 @@ def optimize_noise(std_target,noise_ub,cl_friction=10,noise_lb=0,t_erg=1000,tol_
 
 if __name__ == "__main__" :
     
-    cl_friction_md = 5.66
-    noise_opt = 0.0054794921875
+    cl_friction_md = 5.659896689453016
+    noise_opt = 0.335
 
-    test_plot(M=28)
+    # test_plot(M=28)
     
     # noise_opt = optimize_noise(std_target=0.294,cl_friction=cl_friction_md,noise_ub=0.031)
-    # production(noise=noise_opt,cl_friction=cl_friction_md,clf_plot_cutoff=30, M=56)
+    production(noise=noise_opt,cl_friction=cl_friction_md,clf_plot_cutoff=30, M=56)
     
     # import cProfile
     # cProfile.run("profile()")
