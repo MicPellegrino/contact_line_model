@@ -418,7 +418,7 @@ def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, clf_plot_cuto
 
     L, A = np.meshgrid(l_vec,a_vec,sparse=False,indexing='ij')
 
-    parametric_study(noise,l_vec,a_vec,mu_f=cl_friction,R0=15,M=M,t_fin=30,t_bin=0.1)
+    parametric_study(noise,l_vec,a_vec,mu_f=cl_friction,R0=15,theta_g_0_flat=101.2,M=M,t_fin=15,t_bin=0.1)
 
     if MPI_RANK == MPI_ROOT :
         d1 = np.load('diff_ode.npy')
@@ -444,6 +444,7 @@ def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, clf_plot_cuto
         cb2 = plt.colorbar(dmap2,ax=ax2)
         cb2.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
         cb2.ax.tick_params(labelsize=0.8*FST)
+        plt.tight_layout()
         plt.savefig('ca-hysteresis.png')
         plt.show()
 
@@ -468,6 +469,7 @@ def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, clf_plot_cuto
         cb2.ax.set_ylabel(r'$\log(\mu_f^*/\mu_f)$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
         # cb2.ax.set_ylabel(r'$\mu_f^*/\mu_f$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
         cb2.ax.tick_params(labelsize=0.8*FST)
+        plt.tight_layout()
         plt.savefig('friction-amplification.png')
         plt.show()
 
@@ -559,7 +561,7 @@ if __name__ == "__main__" :
     # test_plot(M=28)
     
     # noise_opt = optimize_noise(std_target=0.294,cl_friction=cl_friction_md,noise_ub=0.031)
-    production(noise=noise_opt,cl_friction=cl_friction_md,clf_plot_cutoff=30, M=56)
+    production(noise=noise_opt,cl_friction=cl_friction_md,clf_plot_cutoff=10,M=56)
     
     # import cProfile
     # cProfile.run("profile()")
