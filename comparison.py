@@ -555,8 +555,12 @@ def optimize_noise(std_target,noise_ub,cl_friction=10,noise_lb=0,t_erg=1000,tol_
 
 if __name__ == "__main__" :
     
+    # REFERENCE
     cl_friction_md = 5.659896689453016
-    noise_opt = 0.335
+    # cl_friction_md = 10    
+
+    # noise_opt = 0.335
+    noise_opt = 0.20
 
     # test_plot(M=28)
     
