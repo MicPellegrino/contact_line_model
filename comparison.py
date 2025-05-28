@@ -401,10 +401,13 @@ def parametric_study(noise,l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,the
 
 
 #################################################################################################################
-def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, clf_plot_cutoff=10, M=25, Np=40) :
-    
+def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, cah_plot_cutoff=None, clf_plot_cutoff=None, M=25, Np=40) :
+
     l_vec = np.linspace(0.5,3.5,Np)
     a_vec = np.linspace(0,1.0,Np)
+
+    f_tag = '{0:.3f}'.format(cl_friction)
+    n_tag = '{0:.3f}'.format(noise)
 
     # if MPI_RANK == MPI_ROOT :
         # print(l_vec)
@@ -427,17 +430,24 @@ def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, clf_plot_cuto
 
     if MPI_RANK == MPI_ROOT :
 
-        vmax = max(np.max(d1),np.max(d2))
+        if cah_plot_cutoff==None :
+            cah_plot_cutoff = np.max(d2)
+
+        if clf_plot_cutoff==None :
+            # Take the 95% percentile
+            clf_plot_cutoff = np.percentile(np.log(mr), 95)
+
+        # vmax = max(np.max(d1),np.max(d2))
 
         fig1, (ax1, ax2) = plt.subplots(1, 2)
-        dmap1 = ax1.pcolormesh(L,A,d1,vmin=0,vmax=vmax,cmap=cm.plasma)
+        dmap1 = ax1.pcolormesh(L,A,d1,vmin=0,vmax=np.max(d1),cmap=cm.plasma)
         ax1.set_xlabel('l [nm]',fontsize=FSL)
         ax1.set_ylabel('a [1]',fontsize=FSL)
         ax1.tick_params(labelsize=FST)
         cb1 = plt.colorbar(dmap1,ax=ax1)
         cb1.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
         cb1.ax.tick_params(labelsize=0.8*FST)
-        dmap2 = ax2.pcolormesh(L,A,d2,vmin=0,vmax=vmax,cmap=cm.plasma)
+        dmap2 = ax2.pcolormesh(L,A,d2,vmin=0,vmax=cah_plot_cutoff,cmap=cm.plasma)
         ax2.set_xlabel('l [nm]',fontsize=FSL)
         ax2.set_ylabel('a [1]',fontsize=FSL)
         ax2.tick_params(labelsize=FST)
@@ -445,23 +455,27 @@ def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, clf_plot_cuto
         cb2.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
         cb2.ax.tick_params(labelsize=0.8*FST)
         plt.tight_layout()
-        plt.savefig('ca-hysteresis.png')
-        plt.show()
+        plt.savefig("figures/a-hysteresis_muf="+f_tag+"_ns="+n_tag+".png",format='png')
+        # plt.show()
 
     if MPI_RANK == MPI_ROOT :
 
-        vmax = max(np.max(d1),np.max(d2))
+        # vmax = max(np.max(d1),np.max(d2))
 
         fig1, (ax1, ax2) = plt.subplots(1, 2)
-        dmap1 = ax1.pcolormesh(L,A,d2,vmin=0,vmax=vmax,cmap=cm.plasma)
+        dmap1 = ax1.pcolormesh(L,A,d2,vmin=0,vmax=cah_plot_cutoff,cmap=cm.plasma)
         ax1.set_xlabel('l [nm]',fontsize=FSL)
         ax1.set_ylabel('a [1]',fontsize=FSL)
         ax1.tick_params(labelsize=FST)
         cb1 = plt.colorbar(dmap1,ax=ax1)
         cb1.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
         cb1.ax.tick_params(labelsize=0.8*FST)
+        
+        ### TEST ###
         dmap2 = ax2.pcolormesh(L,A,np.log(mr),vmin=1,vmax=clf_plot_cutoff,cmap=cm.plasma)
-        # dmap2 = ax2.pcolormesh(L,A,mr,vmin=1,vmax=500,cmap=cm.plasma)
+        # dmap2 = ax2.pcolormesh(L,A,mr,cmap=cm.plasma)
+        ### ---- ###
+
         ax2.set_xlabel('l [nm]',fontsize=FSL)
         ax2.set_ylabel('a [1]',fontsize=FSL)
         ax2.tick_params(labelsize=FST)
@@ -470,8 +484,8 @@ def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, clf_plot_cuto
         # cb2.ax.set_ylabel(r'$\mu_f^*/\mu_f$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
         cb2.ax.tick_params(labelsize=0.8*FST)
         plt.tight_layout()
-        plt.savefig('friction-amplification.png')
-        plt.show()
+        plt.savefig("figures/friction-amplification_muf="+f_tag+"_ns="+n_tag+".png",format='png')
+        # plt.show()
 
 
 #################################################################################################################
@@ -556,16 +570,20 @@ def optimize_noise(std_target,noise_ub,cl_friction=10,noise_lb=0,t_erg=1000,tol_
 if __name__ == "__main__" :
     
     # REFERENCE
-    cl_friction_md = 5.659896689453016
-    # cl_friction_md = 10    
-
-    # noise_opt = 0.335
-    noise_opt = 0.20
+    # cl_friction_md = 5.659896689453016
+    # noise_opt = 0.25
 
     # test_plot(M=28)
     
     # noise_opt = optimize_noise(std_target=0.294,cl_friction=cl_friction_md,noise_ub=0.031)
-    production(noise=noise_opt,cl_friction=cl_friction_md,clf_plot_cutoff=10,M=56)
-    
+    # production(noise=noise_opt,cl_friction=cl_friction_md,cah_plot_cutoff=10,clf_plot_cutoff=5,M=56)
+
+    # Numerical scan
+    noise_vec = np.linspace(0.1,0.55,10)
+    cl_friction_vec = np.linspace(3,12,10)
+    for i in range(len(noise_vec)) :
+        for j in range(len(cl_friction_vec)) :
+            production(noise=noise_vec[i],cl_friction=cl_friction_vec[j],cah_plot_cutoff=17.5,clf_plot_cutoff=4,M=56)
+
     # import cProfile
     # cProfile.run("profile()")
