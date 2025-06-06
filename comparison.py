@@ -280,6 +280,10 @@ class EulerMurayama :
 #################################################################################################################
 def testPlot(M=1) :
 
+    """
+        Checking how the solution looks like for different sets of parameters
+    """
+
     # Flat surface
     # RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=0,theta_g_0_flat=105.8,theta_e=55.6)
 
@@ -360,141 +364,11 @@ def testPlot(M=1) :
 
 
 #################################################################################################################
-def parametric_study(noise,l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,theta_e=55.6,t_fin=100.0,t_bin=0.5,M=25,mvfit=10000) :
-
-    s = (len(l_vec),len(a_vec))
-    theta_w_vec = np.zeros(s)
-    theta_fin_ode_vec = np.zeros(s)
-    theta_fin_sde_vec = np.zeros(s)
-    mu_f_ratio = np.zeros(s)
-
-    p0 = None
-    n = 0
-    for i in range(len(l_vec)) :
-        for j in range(len(a_vec)) :
-            n += 1
-            if MPI_RANK == MPI_ROOT :
-                print("[ PROGRESS "+str(n)+"/"+str(theta_w_vec.size)+" ]")
-            RS = RoughSubstrate(l=l_vec[i],mu_f=mu_f,R0=R0,a=a_vec[j],theta_g_0_flat=theta_g_0_flat,theta_e=theta_e,Gamma=noise)
-            EM = EulerMurayama(RS=RS,t_fin=t_fin,t_bin=t_bin,M=M)
-            EM.simulate_ode(RS)
-            EM.simulate_sde(RS)
-            # p0 = EM.fit_cl_friction(RS,p0,mv=mvfit)
-            p0 = EM.fit_cl_friction_ls(RS,p0_cf=p0,mv=mvfit)
-            theta_w = RS.theta_w
-            theta_fin_ode = EM.theta_g_vec[-1]
-            theta_fin_sde = np.mean(EM.theta_g_ens[int(0.8*EM.Nt):])
-            theta_w_vec[i,j] = theta_w
-            theta_fin_ode_vec[i,j] = theta_fin_ode
-            theta_fin_sde_vec[i,j] = theta_fin_sde
-            mu_f_ratio[i,j] = EM.mu_f_fit/mu_f
-            if MPI_RANK == MPI_ROOT :
-                print("theta_w       = "+str(theta_w)+" [deg]")
-                print("theta_fin_ode = "+str(theta_fin_ode)+" [deg]")
-                print("theta_fin_sde = "+str(theta_fin_sde)+" [deg]")
-                print("# ######################################## #")
-
-    diff_ode = np.abs(theta_fin_ode_vec-theta_w_vec)
-    diff_sde = np.abs(theta_fin_sde_vec-theta_w_vec)
-
-    if MPI_RANK == MPI_ROOT :
-        np.save('diff_ode.npy',diff_ode)
-        np.save('diff_sde.npy',diff_sde)
-        np.save('mu_f_ratio.npy',mu_f_ratio)
-
-
-#################################################################################################################
-def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, R0_md=15, theta_e_md=55.6, t_fin_md=15,
-                cah_plot_cutoff=None, clf_plot_cutoff=None, M=25, Np=40) :
-
-    # l_vec = np.linspace(0.5,3.5,Np)
-    l_vec = np.linspace(0.25,3.5,Np)
-    a_vec = np.linspace(0,1.0,Np)
-
-    f_tag = '{0:.3f}'.format(cl_friction)
-    n_tag = '{0:.3f}'.format(noise)
-
-    # if MPI_RANK == MPI_ROOT :
-        # print(l_vec)
-        # print(a_vec)
-        # np.save('l_vec.npy',l_vec)
-        # np.save('a_vec.npy',a_vec)
-
-    # TODO: Should be broadcasted from root!
-    # l_vec = np.load('l_vec.npy')
-    # a_vec = np.load('a_vec.npy')
-
-    L, A = np.meshgrid(l_vec,a_vec,sparse=False,indexing='ij')
-
-    parametric_study(noise,l_vec,a_vec,mu_f=cl_friction,R0=R0_md,theta_g_0_flat=101.2,theta_e=theta_e_md,M=M,t_fin=t_fin_md,t_bin=0.1)
-
-    if MPI_RANK == MPI_ROOT :
-        d1 = np.load('diff_ode.npy')
-        d2 = np.load('diff_sde.npy')
-        mr = np.load('mu_f_ratio.npy')
-
-    if MPI_RANK == MPI_ROOT :
-
-        if cah_plot_cutoff==None :
-            cah_plot_cutoff = np.max(d2)
-
-        if clf_plot_cutoff==None :
-            # Take the 95% percentile
-            clf_plot_cutoff = np.percentile(np.log(mr), 95)
-
-        # vmax = max(np.max(d1),np.max(d2))
-
-        fig1, (ax1, ax2) = plt.subplots(1, 2)
-        dmap1 = ax1.pcolormesh(L,A,d1,vmin=0,vmax=np.max(d1),cmap=cm.plasma)
-        ax1.set_xlabel('l [nm]',fontsize=FSL)
-        ax1.set_ylabel('a [1]',fontsize=FSL)
-        ax1.tick_params(labelsize=FST)
-        cb1 = plt.colorbar(dmap1,ax=ax1)
-        cb1.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
-        cb1.ax.tick_params(labelsize=0.8*FST)
-        dmap2 = ax2.pcolormesh(L,A,d2,vmin=0,vmax=cah_plot_cutoff,cmap=cm.plasma)
-        ax2.set_xlabel('l [nm]',fontsize=FSL)
-        ax2.set_ylabel('a [1]',fontsize=FSL)
-        ax2.tick_params(labelsize=FST)
-        cb2 = plt.colorbar(dmap2,ax=ax2)
-        cb2.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
-        cb2.ax.tick_params(labelsize=0.8*FST)
-        plt.tight_layout()
-        plt.savefig("figures/a-hysteresis_muf="+f_tag+"_ns="+n_tag+".png",format='png')
-        # plt.show()
-
-    if MPI_RANK == MPI_ROOT :
-
-        # vmax = max(np.max(d1),np.max(d2))
-
-        fig1, (ax1, ax2) = plt.subplots(1, 2)
-        dmap1 = ax1.pcolormesh(L,A,d2,vmin=0,vmax=cah_plot_cutoff,cmap=cm.plasma)
-        ax1.set_xlabel('l [nm]',fontsize=FSL)
-        ax1.set_ylabel('a [1]',fontsize=FSL)
-        ax1.tick_params(labelsize=FST)
-        cb1 = plt.colorbar(dmap1,ax=ax1)
-        cb1.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
-        cb1.ax.tick_params(labelsize=0.8*FST)
-        
-        ### TEST ###
-        dmap2 = ax2.pcolormesh(L,A,np.log(mr),vmin=1,vmax=clf_plot_cutoff,cmap=cm.plasma)
-        # dmap2 = ax2.pcolormesh(L,A,mr,cmap=cm.plasma)
-        ### ---- ###
-
-        ax2.set_xlabel('l [nm]',fontsize=FSL)
-        ax2.set_ylabel('a [1]',fontsize=FSL)
-        ax2.tick_params(labelsize=FST)
-        cb2 = plt.colorbar(dmap2,ax=ax2)
-        cb2.ax.set_ylabel(r'$\log(\mu_f^*/\mu_f)$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
-        # cb2.ax.set_ylabel(r'$\mu_f^*/\mu_f$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
-        cb2.ax.tick_params(labelsize=0.8*FST)
-        plt.tight_layout()
-        plt.savefig("figures/friction-amplification_muf="+f_tag+"_ns="+n_tag+".png",format='png')
-        # plt.show()
-
-
-#################################################################################################################
 def profile(M=1) :
+
+    """
+        Example run to profile the code
+    """
 
     RS = RoughSubstrate(l=3.0357142857142856,mu_f=5.34,R0=15,a=1,theta_g_0_flat=105.8,theta_e=55.6)
     EM = EulerMurayama(RS=RS,t_fin=35.0,t_bin=0.1,M=M)
@@ -505,6 +379,11 @@ def profile(M=1) :
 
 #################################################################################################################
 def optimize_noise(std_target,noise_ub,cl_friction=10,noise_lb=0,t_erg=1000,tol_std=0.01,tol_noise=0.001,maxit=100,plot=False) :
+
+    """
+        Attempt to "optimize" the noise given the standard deviation from MD
+        It's stupid: you cannot use a simple bisection for this!!!
+    """
 
     # Init sigma to some number that is larger than std_target+tol
     sigma = std_target*(1+10*tol_std)
@@ -605,4 +484,3 @@ if __name__ == "__main__" :
     
     # PRODUCTION RUNS (TO BE REFACTORED!)
     # noise_opt = optimize_noise(std_target=0.294,cl_friction=cl_friction_md,noise_ub=0.031)
-    # production(noise=noise_opt,cl_friction=cl_friction_md,cah_plot_cutoff=10,clf_plot_cutoff=5,M=56)
