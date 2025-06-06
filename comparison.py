@@ -401,9 +401,11 @@ def parametric_study(noise,l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,the
 
 
 #################################################################################################################
-def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, cah_plot_cutoff=None, clf_plot_cutoff=None, M=25, Np=40) :
+def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, R0_md=15, theta_e_md=55.6, t_fin_md=15,
+                cah_plot_cutoff=None, clf_plot_cutoff=None, M=25, Np=40) :
 
-    l_vec = np.linspace(0.5,3.5,Np)
+    # l_vec = np.linspace(0.5,3.5,Np)
+    l_vec = np.linspace(0.25,3.5,Np)
     a_vec = np.linspace(0,1.0,Np)
 
     f_tag = '{0:.3f}'.format(cl_friction)
@@ -421,7 +423,7 @@ def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, cah_plot_cuto
 
     L, A = np.meshgrid(l_vec,a_vec,sparse=False,indexing='ij')
 
-    parametric_study(noise,l_vec,a_vec,mu_f=cl_friction,R0=15,theta_g_0_flat=101.2,M=M,t_fin=15,t_bin=0.1)
+    parametric_study(noise,l_vec,a_vec,mu_f=cl_friction,R0=R0_md,theta_g_0_flat=101.2,theta_e=theta_e_md,M=M,t_fin=t_fin_md,t_bin=0.1)
 
     if MPI_RANK == MPI_ROOT :
         d1 = np.load('diff_ode.npy')
@@ -579,11 +581,13 @@ if __name__ == "__main__" :
     # production(noise=noise_opt,cl_friction=cl_friction_md,cah_plot_cutoff=10,clf_plot_cutoff=5,M=56)
 
     # Numerical scan
-    noise_vec = np.linspace(0.1,0.55,10)
-    cl_friction_vec = np.linspace(3,12,10)
+    R0_md = 20
+    noise_vec = np.linspace(0.1,0.5,5)
+    cl_friction_vec = np.linspace(4,8,5)
     for i in range(len(noise_vec)) :
         for j in range(len(cl_friction_vec)) :
-            production(noise=noise_vec[i],cl_friction=cl_friction_vec[j],cah_plot_cutoff=17.5,clf_plot_cutoff=4,M=56)
+            production(noise=noise_vec[i],cl_friction=cl_friction_vec[j],R0_md=R0_md,
+                        theta_e_md=55.6,t_fin_md=50,M=56) # ,cah_plot_cutoff=20,clf_plot_cutoff=5)
 
     # import cProfile
     # cProfile.run("profile()")
