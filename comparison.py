@@ -1,13 +1,6 @@
 import numpy as np
 import numpy.random as rng
 
-# Possibily to remove after refactoring
-import matplotlib.pyplot as plt
-from matplotlib import cm
-from matplotlib import rc
-rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
-rc('text', usetex=True)
-
 # Needed for fitting the contact line friction coefficient
 import scipy.optimize as sc_opt
 import scipy.special as sc_spc
@@ -284,6 +277,12 @@ def testPlot(M=1) :
         Checking how the solution looks like for different sets of parameters
     """
 
+    import matplotlib.pyplot as plt
+    from matplotlib import cm
+    from matplotlib import rc
+    rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
+    rc('text', usetex=True)
+
     # Flat surface
     # RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=0,theta_g_0_flat=105.8,theta_e=55.6)
 
@@ -346,13 +345,11 @@ def testPlot(M=1) :
     EM.fit_cl_friction_ls(RS,p0_cf=p0,mv=10000)
 
     if MPI_RANK == MPI_ROOT :
-        
         fig1, (ax1, ax2) = plt.subplots(1, 2)
         ax1.plot(EM.t, EM.x_fit)
         ax1.plot(EM.t, EM.x)
         ax2.plot(EM.t, EM.v_fit)
         plt.show()
-
         plt.plot(EM.ct, EM.v_fit, 'k-', linewidth=3.0)
         plt.plot(EM.ct, EM.v_mkt, 'r-', linewidth=3.0, label='fit eq. 7')
         plt.tick_params(axis='x', labelsize=25)
@@ -423,7 +420,13 @@ def optimize_noise(std_target,noise_ub,cl_friction=10,noise_lb=0,t_erg=1000,tol_
         print("----- -------------------------------------- -----")
     EM.simulate_ode(RS)
 
-    if plot :
+    if plot and (MPI_RANK==MPI_ROOT):
+
+        import matplotlib.pyplot as plt
+        from matplotlib import cm
+        from matplotlib import rc
+        rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
+        rc('text', usetex=True)
 
         fig1, (ax1, ax2) = plt.subplots(2, 1)
         ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_vec/RS.k, 'k-', linewidth=3.0)
@@ -477,6 +480,6 @@ if __name__ == "__main__" :
         ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
         ps.print_stats()
         print(s.getvalue())
-    
+
     # NOISE OPTIMIZATION
-    # noise_opt = optimize_noise(std_target=0.294,cl_friction=cl_friction_md,noise_ub=0.031)
+    # noise_opt = optimize_noise(std_target=0.294,cl_friction=5.659896689453016,noise_ub=0.031)
