@@ -12,6 +12,8 @@ import scipy.special as sc_spc
 
 from numba import jit
 
+import cProfile
+
 # To speedup the SDE simulation
 from mpi4py import MPI
 MPI_COMM = MPI.COMM_WORLD
@@ -491,10 +493,10 @@ def production(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, R0_md=15, the
 
 
 #################################################################################################################
-def profile() :
+def profile(M=1) :
 
     RS = RoughSubstrate(l=3.0357142857142856,mu_f=5.34,R0=15,a=1,theta_g_0_flat=105.8,theta_e=55.6)
-    EM = EulerMurayama(RS=RS,t_fin=35.0,t_bin=0.1,M=20)
+    EM = EulerMurayama(RS=RS,t_fin=35.0,t_bin=0.1,M=M)
     EM.simulate_ode(RS)
     EM.simulate_sde(RS)
     EM.fit_cl_friction(RS)
@@ -571,23 +573,27 @@ def optimize_noise(std_target,noise_ub,cl_friction=10,noise_lb=0,t_erg=1000,tol_
 
 if __name__ == "__main__" :
     
-    # REFERENCE
+    import io
+    import pstats
+
+    # REFERENCE VALUES
     # cl_friction_md = 5.659896689453016
     # noise_opt = 0.25
 
-    # test_plot(M=28)
+    # TESTING A SIMPLE SIMULATIONS
+    # test_plot(M=56)
+
+    # PROFILING (ChatGPT code, to be cleaned...)
+    pr = cProfile.Profile()
+    pr.enable()
+    profile(M=56)
+    pr.disable()
+    if MPI_RANK == MPI_ROOT:
+        s = io.StringIO()
+        ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
+        ps.print_stats()
+        print(s.getvalue())
     
+    # PRODUCTION RUNS (TO BE REFACTORED!)
     # noise_opt = optimize_noise(std_target=0.294,cl_friction=cl_friction_md,noise_ub=0.031)
     # production(noise=noise_opt,cl_friction=cl_friction_md,cah_plot_cutoff=10,clf_plot_cutoff=5,M=56)
-
-    # Numerical scan
-    R0_md = 20
-    noise_vec = np.linspace(0.1,0.5,5)
-    cl_friction_vec = np.linspace(4,8,5)
-    for i in range(len(noise_vec)) :
-        for j in range(len(cl_friction_vec)) :
-            production(noise=noise_vec[i],cl_friction=cl_friction_vec[j],R0_md=R0_md,
-                        theta_e_md=55.6,t_fin_md=50,M=56) # ,cah_plot_cutoff=20,clf_plot_cutoff=5)
-
-    # import cProfile
-    # cProfile.run("profile()")
