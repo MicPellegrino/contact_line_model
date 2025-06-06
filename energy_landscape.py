@@ -1,3 +1,10 @@
+"""
+Visualizing the energy landscape in case of
+1. Atomistically-flat surfaces;
+2. Surfaces with strong/macroscopic defects;
+3. Surfaces with weak/nanoscopic defects.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 
