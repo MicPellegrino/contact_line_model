@@ -11,6 +11,10 @@ M = 56
 cah_plot_cutoff = None
 clf_plot_cutoff = None
 
+# Reference values for noise and cl friction
+# cl_friction_md = 5.659896689453016
+# noise_opt = 0.25
+
 # Define range of cl friction and noise
 noise_vec = np.linspace(0.1,0.5,5)
 cl_friction_vec = np.linspace(4,8,5)

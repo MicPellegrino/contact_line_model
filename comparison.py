@@ -456,9 +456,7 @@ if __name__ == "__main__" :
     import io
     import pstats
 
-    # REFERENCE VALUES
-    # cl_friction_md = 5.659896689453016
-    # noise_opt = 0.25
+    # BASELINE VALUES
     if MPI_RANK == MPI_ROOT :
         print("### Baseline parameters ------------ ###")
         print("Surface tension      = "+str(gamma)+" [mPa*m]")
@@ -470,7 +468,6 @@ if __name__ == "__main__" :
     testPlot(M=56)
 
     # PROFILING (ChatGPT code, to be cleaned...)
-    """
     pr = cProfile.Profile()
     pr.enable()
     profile(M=56)
@@ -480,7 +477,6 @@ if __name__ == "__main__" :
         ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
         ps.print_stats()
         print(s.getvalue())
-    """
     
-    # PRODUCTION RUNS (TO BE REFACTORED!)
+    # NOISE OPTIMIZATION
     # noise_opt = optimize_noise(std_target=0.294,cl_friction=cl_friction_md,noise_ub=0.031)
