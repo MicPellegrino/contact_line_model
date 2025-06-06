@@ -278,7 +278,7 @@ class EulerMurayama :
 
 
 #################################################################################################################
-def test_plot(M=1) :
+def testPlot(M=1) :
 
     # Flat surface
     # RS = RoughSubstrate(l=1,mu_f=10*mu,R0=20,a=0,theta_g_0_flat=105.8,theta_e=55.6)
@@ -588,7 +588,7 @@ if __name__ == "__main__" :
         print("Box depth            = "+str(Ly)+" [nm]")
 
     # TESTING A SIMPLE SIMULATIONS
-    # test_plot(M=56)
+    testPlot(M=56)
 
     # PROFILING (ChatGPT code, to be cleaned...)
     """
