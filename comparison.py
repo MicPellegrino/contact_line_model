@@ -1,17 +1,22 @@
 import numpy as np
 import numpy.random as rng
 
+# Possibily to remove after refactoring
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from matplotlib import rc
 rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
 rc('text', usetex=True)
 
+# Needed for fitting the contact line friction coefficient
 import scipy.optimize as sc_opt
 import scipy.special as sc_spc
 
+# To precompile some simple functions
+# (the rest needs to be parallelized...)
 from numba import jit
 
+# Profiling (see "__main__")
 import cProfile
 
 # To speedup the SDE simulation
@@ -55,10 +60,6 @@ T = 300
 kB = 0.1380649
 # Depth [nm]
 Ly = 4.67650
-
-if MPI_RANK == MPI_ROOT :
-    print("Surface tension       = "+str(gamma)+" [mPa*m]")
-    print("Bulk viscosity        = "+str(mu)+" [mPa*s]")
 
 # Reduced droplet area [nondim]
 @jit(nopython=True)
@@ -579,11 +580,18 @@ if __name__ == "__main__" :
     # REFERENCE VALUES
     # cl_friction_md = 5.659896689453016
     # noise_opt = 0.25
+    if MPI_RANK == MPI_ROOT :
+        print("### Baseline parameters ------------ ###")
+        print("Surface tension      = "+str(gamma)+" [mPa*m]")
+        print("Bulk viscosity       = "+str(mu)+" [mPa*s]")
+        print("Temperature          = "+str(T)+" [K]")
+        print("Box depth            = "+str(Ly)+" [nm]")
 
     # TESTING A SIMPLE SIMULATIONS
     # test_plot(M=56)
 
     # PROFILING (ChatGPT code, to be cleaned...)
+    """
     pr = cProfile.Profile()
     pr.enable()
     profile(M=56)
@@ -593,6 +601,7 @@ if __name__ == "__main__" :
         ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
         ps.print_stats()
         print(s.getvalue())
+    """
     
     # PRODUCTION RUNS (TO BE REFACTORED!)
     # noise_opt = optimize_noise(std_target=0.294,cl_friction=cl_friction_md,noise_ub=0.031)
