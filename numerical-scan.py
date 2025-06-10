@@ -4,7 +4,7 @@ from production import productionRun
 # Defining baseline parameters
 R0_md = 20
 theta_e_md = 55.6
-t_fin_md = 15
+t_fin_md = 30
 M = 56
 
 # Colormap value boundaries

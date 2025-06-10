@@ -58,14 +58,17 @@ if __name__ == "__main__" :
     rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
     rc('text', usetex=True)
 
-    Np = 10
-    noise = 0.25
+    from comparison import mu
 
-    l_vec = np.linspace(0.25,3.5,Np)
+    Np = 40
+    # noise = 0.25
+    noise = None
+
+    l_vec = np.linspace(0.25,3.0,Np)
     a_vec = np.linspace(0,1.0,Np)
     L, A = np.meshgrid(l_vec,a_vec,sparse=False,indexing='ij')
 
-    parametricStudy(noise,l_vec,a_vec,mu_f=10,R0=20,theta_g_0_flat=101.2,theta_e=55.6,t_fin=100.0,t_bin=0.5,M=56,mvfit=10000)
+    parametricStudy(noise,l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,theta_e=55.6,t_fin=100.0,t_bin=0.5,M=56,mvfit=10000)
 
     if MPI_RANK == MPI_ROOT :
 

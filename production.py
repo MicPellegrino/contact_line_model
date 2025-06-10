@@ -25,7 +25,7 @@ def productionRun(FSL=25, FST=20, LBP=35, noise=None, cl_friction=10, R0_md=15, 
 
     L, A = np.meshgrid(l_vec,a_vec,sparse=False,indexing='ij')
 
-    parametricStudy(noise,l_vec,a_vec,mu_f=cl_friction,R0=R0_md,theta_g_0_flat=101.2,theta_e=theta_e_md,M=M,t_fin=t_fin_md,t_bin=0.1)
+    parametricStudy(noise,l_vec,a_vec,mu_f=cl_friction,R0=R0_md,theta_g_0_flat=101.2,theta_e=theta_e_md,M=M,t_fin=t_fin_md,t_bin=0.2)
 
     if MPI_RANK == MPI_ROOT :
         d1 = np.load('diff_ode.npy')
