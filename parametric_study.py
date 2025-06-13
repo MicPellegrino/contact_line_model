@@ -3,6 +3,8 @@ from comparison import RoughSubstrate, EulerMurayama
 
 # Global variables for MPI
 from comparison import MPI_COMM, MPI_RANK, MPI_SIZE, MPI_ROOT
+# Global physical variables
+from comparison import gamma, mu, T, kB, Ly
 
 # Other import
 import numpy as np
@@ -19,6 +21,7 @@ def parametricStudy(noise,l_vec,a_vec,mu_f=10,R0=20,theta_g_0_flat=105.8,theta_e
     n = 0
     for i in range(len(l_vec)) :
         for j in range(len(a_vec)) :
+            noise = (2*kB*T)/(Ly*l_vec[i]*10*gamma)
             n += 1
             if MPI_RANK == MPI_ROOT :
                 print("[ PROGRESS "+str(n)+"/"+str(theta_w_vec.size)+" ]")
@@ -60,13 +63,19 @@ if __name__ == "__main__" :
 
     from comparison import mu
 
+    # Thermal-capillary length
+    l_th = 0.27
+
     Np = 40
+    # Np = 20
+    
     # noise = 0.25
     noise = None
+    # noise = (2*kB*T)/(Ly*l*10*gamma)
 
-    l_vec = np.linspace(0.25,3.0,Np)
+    l_vec = np.linspace(0.20,2.0,Np)
     a_vec = np.linspace(0,1.0,Np)
-    L, A = np.meshgrid(l_vec,a_vec,sparse=False,indexing='ij')
+    L, A = np.meshgrid(l_vec/l_th,a_vec,sparse=False,indexing='ij')
 
     parametricStudy(noise,l_vec,a_vec,mu_f=10*mu,R0=20,theta_g_0_flat=105.8,theta_e=55.6,t_fin=100.0,t_bin=0.5,M=56,mvfit=10000)
 
@@ -83,17 +92,19 @@ if __name__ == "__main__" :
         cah_plot_cutoff = np.max(d2)
         clf_plot_cutoff = np.percentile(np.log(mr), 95)
 
-        fig1, (ax1, ax2) = plt.subplots(1, 2)
+        # fig1, (ax1, ax2) = plt.subplots(2, 1)
+        ax1 = plt.subplot(211)
         dmap1 = ax1.pcolormesh(L,A,d1,vmin=0,vmax=np.max(d1),cmap=cm.plasma)
-        ax1.set_xlabel('l [nm]',fontsize=FSL)
-        ax1.set_ylabel('a [1]',fontsize=FSL)
+        # ax1.set_xlabel('l [nm]',fontsize=FSL)
+        ax1.set_ylabel(r'$a$ []',fontsize=FSL)
         ax1.tick_params(labelsize=FST)
         cb1 = plt.colorbar(dmap1,ax=ax1)
         cb1.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
         cb1.ax.tick_params(labelsize=0.8*FST)
+        ax2 = plt.subplot(212,sharex=ax1)
         dmap2 = ax2.pcolormesh(L,A,d2,vmin=0,vmax=cah_plot_cutoff,cmap=cm.plasma)
-        ax2.set_xlabel('l [nm]',fontsize=FSL)
-        ax2.set_ylabel('a [1]',fontsize=FSL)
+        ax2.set_xlabel(r'$l/l_{th}$ []',fontsize=FSL)
+        ax2.set_ylabel(r'$a$ []',fontsize=FSL)
         ax2.tick_params(labelsize=FST)
         cb2 = plt.colorbar(dmap2,ax=ax2)
         cb2.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
@@ -101,17 +112,19 @@ if __name__ == "__main__" :
         plt.tight_layout()
         plt.show()
 
-        fig1, (ax1, ax2) = plt.subplots(1, 2)
+        # fig1, (ax1, ax2) = plt.subplots(2, 1)
+        ax1 = plt.subplot(211)
         dmap1 = ax1.pcolormesh(L,A,d2,vmin=0,vmax=cah_plot_cutoff,cmap=cm.plasma)
-        ax1.set_xlabel('l [nm]',fontsize=FSL)
-        ax1.set_ylabel('a [1]',fontsize=FSL)
+        # ax1.set_xlabel('l [nm]',fontsize=FSL)
+        ax1.set_ylabel(r'$a$ []',fontsize=FSL)
         ax1.tick_params(labelsize=FST)
         cb1 = plt.colorbar(dmap1,ax=ax1)
         cb1.ax.set_ylabel(r'$|\theta_{\infty}-\theta_W|$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
         cb1.ax.tick_params(labelsize=0.8*FST)
+        ax2 = plt.subplot(212,sharex=ax1)
         dmap2 = ax2.pcolormesh(L,A,np.log(mr),vmin=1,vmax=clf_plot_cutoff,cmap=cm.plasma)
-        ax2.set_xlabel('l [nm]',fontsize=FSL)
-        ax2.set_ylabel('a [1]',fontsize=FSL)
+        ax2.set_xlabel(r'$l/l_{th}$ []',fontsize=FSL)
+        ax2.set_ylabel(r'$a$ []',fontsize=FSL)
         ax2.tick_params(labelsize=FST)
         cb2 = plt.colorbar(dmap2,ax=ax2)
         cb2.ax.set_ylabel(r'$\log(\mu_f^*/\mu_f)$', rotation=270,fontsize=0.8*FSL,labelpad=LBP)
