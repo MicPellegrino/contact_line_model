@@ -313,31 +313,38 @@ def testPlot(M=1) :
     sigma = np.std(x_lang_eq)
 
     if MPI_RANK == MPI_ROOT :
+
         print("theta_w       = "+str(theta_w)+" [deg]")
         print("theta_fin_ode = "+str(theta_fin_ode)+" [deg]")
         print("theta_fin_sde = "+str(theta_fin_sde)+" [deg]")
         print("Standard deviation = ", sigma, " nm")
 
-    if MPI_RANK == MPI_ROOT :
-        fig1, (ax1, ax2) = plt.subplots(2, 1)
-        ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_vec/RS.k, 'k-', linewidth=3.0, label=r'eq. 4')
-        ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_ens/RS.k, 'r-', linewidth=2.5, label=r'eq. 6')
+        FsLegend = 30
+        FsLabels = 35
+        FsTicks = 27.5
+
+        fig1, (ax1, ax2) = plt.subplots(2, 1, tight_layout=True)
+        
+        ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_vec/RS.k, 'k-', linewidth=4.0, label='Without noise')
+        ax1.plot(RS.tau*EM.t_vec, TWOPI*EM.x_ens/RS.k, 'r-', linewidth=3.0, label='With noise')
         ax1.fill_between(RS.tau*EM.t_vec,TWOPI*(EM.x_ens+EM.x_std)/RS.k,TWOPI*(EM.x_ens-EM.x_std)/RS.k,color='r',alpha=0.5,linewidth=0.0)
-        ax1.set_ylabel(r'$x_{cl}$ [nm]', fontsize=30.0)
+        ax1.set_ylabel(r'$x_{cl}$ [nm]', fontsize=FsLabels)
         ax1.set_xlim([RS.tau*EM.t_vec[0], RS.tau*EM.t_vec[-1]])
-        ax1.legend(fontsize=25)
+        ax1.legend(fontsize=FsLegend)
         ax1.tick_params(axis='x',which='both',labelbottom=False)
-        ax1.tick_params(axis='y', labelsize=25)
-        ax2.plot(RS.tau*EM.t_vec, EM.theta_g_vec, 'k-', linewidth=3.0)
-        ax2.plot(RS.tau*EM.t_vec, EM.theta_g_ens, 'r-', linewidth=2.0)
+        ax1.tick_params(axis='y', labelsize=FsTicks)
+        
+        ax2.plot(RS.tau*EM.t_vec, EM.theta_g_vec, 'k-', linewidth=4.0)
+        ax2.plot(RS.tau*EM.t_vec, EM.theta_g_ens, 'r-', linewidth=3.0)
         ax2.fill_between(RS.tau*EM.t_vec,EM.theta_g_ens+EM.theta_std,EM.theta_g_ens-EM.theta_std,color='r',alpha=0.5,linewidth=0.0)
-        ax2.plot(RS.tau*EM.t_vec, RS.theta_w*np.ones(EM.t_vec.shape), 'b--', linewidth=3, label=r'$\theta_W$')
-        ax2.set_xlabel(r'$t$ [ns]', fontsize=30.0)
-        ax2.set_ylabel(r'$\theta_g$ [deg]', fontsize=30.0)
+        ax2.plot(RS.tau*EM.t_vec, RS.theta_w*np.ones(EM.t_vec.shape), 'g--', linewidth=4.5, label=r'$\theta_W$')
+        ax2.set_xlabel(r'$t$ [ns]', fontsize=FsLabels)
+        ax2.set_ylabel(r'$\theta_g$ [deg]', fontsize=FsLabels)
         ax2.set_xlim([RS.tau*EM.t_vec[0], RS.tau*EM.t_vec[-1]])
-        ax2.legend(fontsize=25)
-        ax2.tick_params(axis='x', labelsize=25)
-        ax2.tick_params(axis='y', labelsize=25)
+        ax2.legend(fontsize=FsLegend)
+        ax2.tick_params(axis='x', labelsize=FsTicks)
+        ax2.tick_params(axis='y', labelsize=FsTicks)
+        
         plt.show()
 
     p0 = None
@@ -345,18 +352,21 @@ def testPlot(M=1) :
     EM.fit_cl_friction_ls(RS,p0_cf=p0,mv=10000)
 
     if MPI_RANK == MPI_ROOT :
-        fig1, (ax1, ax2) = plt.subplots(1, 2)
-        ax1.plot(EM.t, EM.x_fit)
-        ax1.plot(EM.t, EM.x)
-        ax2.plot(EM.t, EM.v_fit)
-        plt.show()
-        plt.plot(EM.ct, EM.v_fit, 'k-', linewidth=3.0)
-        plt.plot(EM.ct, EM.v_mkt, 'r-', linewidth=3.0, label='fit eq. 7')
-        plt.tick_params(axis='x', labelsize=25)
-        plt.tick_params(axis='y', labelsize=25)
-        plt.legend(fontsize=25)
-        plt.xlabel(r'$\cos<\theta_g>$ []', fontsize=30.0)
-        plt.ylabel(r'$<u_{cl}>$ [nm/ns]', fontsize=30.0)
+        
+        # fig1, (ax1, ax2) = plt.subplots(1, 2, tight_layout=True)
+        # ax1.plot(EM.t, EM.x_fit)
+        # ax1.plot(EM.t, EM.x)
+        # ax2.plot(EM.t, EM.v_fit)
+        # plt.show()
+        
+        fig2, ax3 = plt.subplots(1, 1, tight_layout=True)
+        plt.plot(EM.ct, EM.v_fit, 'r-', linewidth=4.0)
+        plt.plot(EM.ct, EM.v_mkt, 'b--', linewidth=3.5, label='Fit')
+        plt.tick_params(axis='x', labelsize=FsTicks)
+        plt.tick_params(axis='y', labelsize=FsTicks)
+        plt.legend(fontsize=FsLegend)
+        plt.xlabel(r'$\cos<\theta_g>$ []', fontsize=FsLabels)
+        plt.ylabel(r'$<u_{cl}>$ [nm/ns]', fontsize=FsLabels)
         plt.show()
 
 
@@ -471,6 +481,7 @@ if __name__ == "__main__" :
     testPlot(M=56)
 
     # PROFILING (ChatGPT code, to be cleaned...)
+    """
     pr = cProfile.Profile()
     pr.enable()
     profile(M=56)
@@ -480,6 +491,7 @@ if __name__ == "__main__" :
         ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
         ps.print_stats()
         print(s.getvalue())
+    """
 
     # NOISE OPTIMIZATION
     # noise_opt = optimize_noise(std_target=0.294,cl_friction=5.659896689453016,noise_ub=0.031)
