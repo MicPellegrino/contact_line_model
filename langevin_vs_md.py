@@ -10,9 +10,9 @@ from matplotlib import rc
 rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
 rc('text', usetex=True)
 
-AX_LABELS_FS = 17.5
-AX_TICKS_FS = 12.5
-LEGEND_FS = 15
+AX_LABELS_FS = 25
+AX_TICKS_FS = 20
+LEGEND_FS = 22.5
 
 # Some useful definitions...
 cos = lambda t : np.cos( np.deg2rad(t) )
@@ -33,13 +33,13 @@ for nt in n_tags :
 """
 
 # Reference substrate
-n_sub = 12
+n_sub = 16
 n_sub_tag = str(n_sub).zfill(2)
 a_sub = 1.0
 a_sub_tag = str(int(10*a_sub)).zfill(2)
 
 # Found by "visual inspection" for a given substrate (see calibrate_noise.py)
-noise_opt = 0.17
+noise_opt = 0.5
 
 # Load MD simulation output
 md_output = np.load("MD_DATA/data_a"+a_sub_tag+"_n"+n_sub_tag+".npz")
@@ -110,7 +110,7 @@ if MPI_RANK == MPI_ROOT :
     ax2.plot(t_lg, EM.theta_g_ens, 'r-', linewidth=3, label='Langevin')
     ax2.plot(t_lg, EM.theta_g_ens+EM.theta_std, 'r:', linewidth=1.25)
     ax2.plot(t_lg, EM.theta_g_ens-EM.theta_std, 'r:', linewidth=1.25)
-    ax2.plot(t_lg, RS.theta_w*np.ones(EM.t_vec.shape), 'b--', linewidth=3.25, label=r'$\theta_W$')
+    ax2.plot(t_lg, RS.theta_w*np.ones(EM.t_vec.shape), 'g--', linewidth=3.25, label=r'$\theta_W$')
 
     ax2.set_xlabel(r'$t$ [ns]', fontsize=AX_LABELS_FS)
     ax2.set_ylabel(r'$\theta_g$ [deg]', fontsize=AX_LABELS_FS)
